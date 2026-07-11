@@ -1,0 +1,181 @@
+import { useCallback, useEffect, useState } from 'react'
+import { RefreshCwIcon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '@/components/ui/table'
+import { cn } from '@/lib/utils'
+import type { LogQuery, LogRow } from '../../../shared/gateway'
+
+const ALL = '__all__'
+const OUTCOMES = ['success', 'failed', 'client_canceled', 'rejected'] as const
+
+const QUERY_LIMIT = 200
+
+function outcomeBadgeClass(outcome: string | null): string {
+  switch (outcome) {
+    case 'success':
+      return 'border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+    case 'failed':
+      return 'border-transparent bg-destructive/15 text-destructive'
+    case 'rejected':
+      return 'border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-400'
+    default:
+      return 'border-transparent bg-muted text-muted-foreground'
+  }
+}
+
+function fmtTime(at: number): string {
+  if (!Number.isFinite(at)) return '—'
+  return new Date(at).toLocaleString()
+}
+
+function fmtNum(n: number | null): string {
+  return typeof n === 'number' ? String(n) : '—'
+}
+
+export function LogsPanel(): React.JSX.Element {
+  const [rows, setRows] = useState<LogRow[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [outcome, setOutcome] = useState<string>(ALL)
+  const [model, setModel] = useState('')
+
+  const runQuery = useCallback(async (filters: { outcome: string; model: string }) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const query: LogQuery = { limit: QUERY_LIMIT }
+      if (filters.outcome !== ALL) query.outcome = filters.outcome
+      if (filters.model.trim()) query.model = filters.model.trim()
+      setRows(await window.api.gateway.queryLogs(query))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Run the first query on mount (reads the gateway's log DB via IPC — an external
+  // system), so the rule's synchronous-setState guard is a false positive here.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void runQuery({ outcome: ALL, model: '' })
+  }, [runQuery])
+
+  const refresh = (): void => void runQuery({ outcome, model })
+
+  const onOutcomeChange = (value: string | null): void => {
+    const next = value ?? ALL
+    setOutcome(next)
+    void runQuery({ outcome: next, model })
+  }
+
+  return (
+    <div className="flex min-h-0 flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={outcome} onValueChange={onOutcomeChange}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="Outcome" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>All outcomes</SelectItem>
+            {OUTCOMES.map((o) => (
+              <SelectItem key={o} value={o}>
+                {o}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Input
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') refresh()
+          }}
+          placeholder="Filter by model…"
+          className="w-56"
+        />
+
+        <Button type="button" variant="outline" size="sm" onClick={refresh} disabled={loading}>
+          <RefreshCwIcon className={cn('size-4', loading && 'animate-spin')} />
+          Refresh
+        </Button>
+
+        <span className="ml-auto text-xs text-muted-foreground">
+          {rows.length} {rows.length === 1 ? 'row' : 'rows'}
+        </span>
+      </div>
+
+      {error ? (
+        <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="min-h-0 flex-1 overflow-auto rounded-md border">
+        <Table>
+          <TableHeader className="sticky top-0 z-10 bg-card">
+            <TableRow>
+              <TableHead>Time</TableHead>
+              <TableHead>Outcome</TableHead>
+              <TableHead className="text-right">Status</TableHead>
+              <TableHead>Model</TableHead>
+              <TableHead>Channel</TableHead>
+              <TableHead className="text-right">In</TableHead>
+              <TableHead className="text-right">Out</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="h-24 text-center text-sm text-muted-foreground">
+                  {loading ? 'Loading…' : 'No requests recorded yet.'}
+                </TableCell>
+              </TableRow>
+            ) : (
+              rows.map((r) => (
+                <TableRow key={r.req_id}>
+                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                    {fmtTime(r.at)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={cn('font-normal', outcomeBadgeClass(r.outcome))}>
+                      {r.outcome ?? '—'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{fmtNum(r.http_status)}</TableCell>
+                  <TableCell className="max-w-48 truncate font-mono text-xs">
+                    {r.model ?? '—'}
+                  </TableCell>
+                  <TableCell className="max-w-40 truncate">{r.channel_name ?? '—'}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {fmtNum(r.input_tokens)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {fmtNum(r.output_tokens)}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  )
+}

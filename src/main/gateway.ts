@@ -77,7 +77,9 @@ export class GatewayManager {
     // In dev, app.getAppPath() is the project root (where package.json lives), so
     // the freshly-built binary sits at <root>/resources/bin. When packaged it is
     // shipped via electron-builder extraResources into <resources>/bin.
-    const baseDir = is.dev ? join(app.getAppPath(), 'resources', 'bin') : join(process.resourcesPath, 'bin')
+    const baseDir = is.dev
+      ? join(app.getAppPath(), 'resources', 'bin')
+      : join(process.resourcesPath, 'bin')
     return join(baseDir, binName)
   }
 
@@ -161,7 +163,9 @@ export class GatewayManager {
       return
     }
 
-    console.error(`[gateway] exited unexpectedly (code=${code} signal=${signal}, uptime=${uptime}ms)`)
+    console.error(
+      `[gateway] exited unexpectedly (code=${code} signal=${signal}, uptime=${uptime}ms)`
+    )
 
     // Crash-loop guard: only count runs that died quickly as rapid failures.
     if (uptime < STABLE_UPTIME_MS) {

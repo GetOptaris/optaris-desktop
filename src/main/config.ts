@@ -169,13 +169,15 @@ export function validateConfigInput(input: ConfigInput): void {
   }
   const channelIds = new Set<string>()
   for (const c of input.channels) {
-    if (!c.id || typeof c.id !== 'string') throw new Error('invalid config: every channel needs an id')
+    if (!c.id || typeof c.id !== 'string')
+      throw new Error('invalid config: every channel needs an id')
     if (channelIds.has(c.id)) throw new Error(`invalid config: duplicate channel id ${c.id}`)
     channelIds.add(c.id)
   }
   const groupIds = new Set<string>()
   for (const g of input.groups) {
-    if (!g.id || typeof g.id !== 'string') throw new Error('invalid config: every group needs an id')
+    if (!g.id || typeof g.id !== 'string')
+      throw new Error('invalid config: every group needs an id')
     if (groupIds.has(g.id)) throw new Error(`invalid config: duplicate group id ${g.id}`)
     groupIds.add(g.id)
   }
