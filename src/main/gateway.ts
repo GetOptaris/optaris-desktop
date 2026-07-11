@@ -31,6 +31,13 @@ interface GatewayOptions {
   port?: number
 }
 
+interface StartOptions {
+  /** Path of the config file the gateway loads and hot-reloads (--config). */
+  configPath?: string
+  /** Directory for the gateway event store (--data-dir): optaris.db + capture/. */
+  dataDir?: string
+}
+
 interface ReadyMessage {
   event: 'ready'
   host: string
@@ -45,6 +52,8 @@ export class GatewayManager {
   private child: ChildProcess | null = null
   private stopping = false
   private port: number | null = null
+  private configPath: string | null = null
+  private dataDir: string | null = null
   private startedAt = 0
   private backoffMs = BACKOFF_INITIAL_MS
   private rapidFailures = 0
@@ -72,9 +81,14 @@ export class GatewayManager {
     return join(baseDir, binName)
   }
 
-  /** Start the gateway and return a promise that resolves with the bound port. */
-  start(): Promise<number> {
+  /**
+   * Start the gateway and return a promise that resolves with the bound port. The
+   * config/data-dir paths are remembered so automatic restarts reuse them.
+   */
+  start(options: StartOptions = {}): Promise<number> {
     this.stopping = false
+    if (options.configPath !== undefined) this.configPath = options.configPath
+    if (options.dataDir !== undefined) this.dataDir = options.dataDir
     this.spawnChild()
     return this.readyPromise
   }
@@ -89,6 +103,8 @@ export class GatewayManager {
       '--parent-pid',
       String(process.pid)
     ]
+    if (this.configPath) args.push('--config', this.configPath)
+    if (this.dataDir) args.push('--data-dir', this.dataDir)
 
     console.log(`[gateway] spawning ${bin} ${args.join(' ')}`)
     const child = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] })

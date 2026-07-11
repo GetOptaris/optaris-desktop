@@ -3,10 +3,11 @@
 // HTTP handlers, and forwards LLM traffic to upstream channels. The Electron main
 // process spawns and supervises this binary; clients point their base_url at it.
 //
-// Phase 1 scope: prove the sidecar boots, mounts the engine handlers, and reports
-// its listening port back to the parent via a single stdout handshake line.
-// Config loading and event persistence (SQLite summaries + JSONL capture) arrive
-// in later phases.
+// Phase 2 scope: load the channels/groups/settings config the parent writes to
+// --config (hot-reloaded on change), route each request to the config-provided
+// default group, and persist request events to --data-dir (SQLite summaries +
+// JSONL raw capture, see store.go). The stdout readiness handshake and parent
+// watchdog from phase 1 are unchanged.
 package main
 
 import (
@@ -50,32 +51,52 @@ func main() {
 	host := flag.String("host", "127.0.0.1", "host/interface to listen on")
 	port := flag.Int("port", envPort, "TCP port to listen on (0 = OS-assigned)")
 	parentPID := flag.Int("parent-pid", 0, "parent process id; gateway self-exits if it disappears (0 = disabled)")
+	configPath := flag.String("config", "", "path to the JSON config file (channels/groups/settings); hot-reloaded on change")
+	dataDir := flag.String("data-dir", "", "directory for the event store (optaris.db + capture/); empty disables persistence")
 	flag.Parse()
 
-	// Build the engine. Phase 1 uses an empty config (no channels/groups) with
-	// default settings; this is enough to construct the engine, mount handlers, and
-	// verify the optaris-core import links. Requests will resolve to "rejected"
-	// because the injected group does not exist yet — that is expected until config
-	// delivery lands.
-	eng := optaris.New(optaris.Config{Settings: settings.Default()})
+	// Build the engine from the parent-provided config. A missing/unparsable config
+	// degrades to empty channels/groups with default settings so the sidecar still
+	// boots and reports ready (requests will then route to no group and be rejected,
+	// which is the fail-loud behavior we want).
+	cfg, meta := loadInitialConfig(*configPath)
+	eng := optaris.New(cfg)
+	holder := newConfigHolder(meta)
 
-	// One summary line per request. Never log Channel.APIKey or captured bodies.
+	// Persistence: with a data-dir we stand up the SQLite + JSONL pipeline; without
+	// one we just surface completed-request summaries on stderr.
+	var store *Store
+	if *dataDir != "" {
+		st, err := newStore(*dataDir, holder)
+		if err != nil {
+			log.Printf("persistence disabled: %v", err)
+		} else {
+			store = st
+			log.Printf("persistence enabled: data-dir=%s", *dataDir)
+		}
+	} else {
+		log.Printf("no --data-dir provided; persistence disabled")
+	}
+
+	// OnEvent runs synchronously in the request goroutine: it must not block. With a
+	// store it only enqueues; without one it logs the completed-request summary.
 	eng.OnEvent(func(ev optaris.Event) {
-		if ev.Phase != optaris.PhaseCompleted {
+		if store != nil {
+			store.enqueue(ev)
 			return
 		}
-		log.Printf("request completed req_id=%s outcome=%s status=%d model=%q group=%s",
-			ev.ReqID, ev.Outcome, ev.HTTPStatus, ev.Model, ev.GroupID)
+		if ev.Phase == optaris.PhaseCompleted {
+			logCompleted(ev)
+		}
 	})
 
-	// Phase 1 injects a fixed placeholder group. Real per-request routing context
-	// (group resolved from auth/config) arrives with the control plane.
-	const placeholderGroup = "grp_default"
+	// Route every request to the config-provided default group. The middleware reads
+	// the group id from the holder on each request so hot-reload takes effect live.
 	mux := http.NewServeMux()
-	mux.Handle("POST /v1/chat/completions", withRoute(placeholderGroup, eng.OpenAIChatHandler()))
-	mux.Handle("POST /v1/responses", withRoute(placeholderGroup, eng.OpenAIResponsesHandler()))
-	mux.Handle("POST /v1/messages", withRoute(placeholderGroup, eng.ClaudeHandler()))
-	mux.Handle("POST /v1beta/models/{modelAndMethod}", withRoute(placeholderGroup, eng.GeminiHandler()))
+	mux.Handle("POST /v1/chat/completions", withRoute(holder, eng.OpenAIChatHandler()))
+	mux.Handle("POST /v1/responses", withRoute(holder, eng.OpenAIResponsesHandler()))
+	mux.Handle("POST /v1/messages", withRoute(holder, eng.ClaudeHandler()))
+	mux.Handle("POST /v1beta/models/{modelAndMethod}", withRoute(holder, eng.GeminiHandler()))
 
 	// Bind first so we can report the actually-bound port (supports --port 0).
 	addr := net.JoinHostPort(*host, strconv.Itoa(*port))
@@ -101,6 +122,11 @@ func main() {
 		go watchParent(ctx, *parentPID, stop)
 	}
 
+	// Hot-reload the config on file change (mtime polling). Stops when ctx is done.
+	if *configPath != "" {
+		go holder.watch(ctx, *configPath, eng, fileModTime(*configPath))
+	}
+
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -113,15 +139,39 @@ func main() {
 	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("serve: %v", err)
 	}
+
+	// Serve has returned: all in-flight requests are done, so no more OnEvent
+	// callbacks can fire. Now it is safe to drain and close the store.
+	if store != nil {
+		store.Close()
+	}
 	log.Printf("gateway stopped")
 }
 
-// withRoute injects the optaris routing context (group id) for every request.
-// WithRoute is a context helper, not an http wrapper, so we set it on the request
-// context before delegating to the engine handler.
-func withRoute(groupID string, next http.Handler) http.Handler {
+// loadInitialConfig loads the startup config, degrading to an empty config with
+// default settings on any error (missing path, unreadable/unparsable file).
+func loadInitialConfig(path string) (optaris.Config, configMeta) {
+	if path == "" {
+		log.Printf("no --config provided; starting with empty config (default settings)")
+		return optaris.Config{Settings: settings.Default()}, configMeta{}
+	}
+	cfg, meta, err := loadConfig(path)
+	if err != nil {
+		log.Printf("failed to load config %q, starting with empty config: %v", path, err)
+		return optaris.Config{Settings: settings.Default()}, configMeta{}
+	}
+	log.Printf("loaded config: channels=%d groups=%d default_group=%q",
+		len(cfg.Channels), len(cfg.Groups), meta.defaultGroupID)
+	return cfg, meta
+}
+
+// withRoute injects the optaris routing context (default group id) for every
+// request. WithRoute is a context helper, not an http wrapper, so we set it on the
+// request context before delegating to the engine handler. The group id is read per
+// request from the holder so config hot-reload takes effect without re-mounting.
+func withRoute(holder *configHolder, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rc := optaris.RouteContext{GroupID: groupID}
+		rc := optaris.RouteContext{GroupID: holder.defaultGroupID()}
 		next.ServeHTTP(w, r.WithContext(optaris.WithRoute(r.Context(), rc)))
 	})
 }

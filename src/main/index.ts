@@ -3,6 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { GatewayManager } from './gateway'
+import { ensureConfig, ensureDataDir } from './config'
 
 // The optaris-gateway sidecar: spawned on ready, killed on quit.
 const gateway = new GatewayManager()
@@ -56,11 +57,16 @@ app.whenReady().then(() => {
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
 
-  // Start the gateway sidecar. Do not block window creation on it; failures are
-  // logged and the supervisor retries with backoff.
-  gateway.start().catch((err) => {
-    console.error('[gateway] failed to start:', err)
-  })
+  // Prepare the gateway's config file and data dir, then start the sidecar. The
+  // config must exist before the gateway spawns (it loads it at startup), so we
+  // await those two quick fs ops; the gateway start itself is not awaited — failures
+  // are logged and the supervisor retries with backoff, without blocking the window.
+  ensureConfig()
+    .then((configPath) => Promise.all([Promise.resolve(configPath), ensureDataDir()]))
+    .then(([configPath, dataDir]) => gateway.start({ configPath, dataDir }))
+    .catch((err) => {
+      console.error('[gateway] failed to start:', err)
+    })
 
   createWindow()
 
