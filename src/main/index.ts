@@ -2,6 +2,10 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { GatewayManager } from './gateway'
+
+// The optaris-gateway sidecar: spawned on ready, killed on quit.
+const gateway = new GatewayManager()
 
 function createWindow(): void {
   // Create the browser window.
@@ -52,6 +56,12 @@ app.whenReady().then(() => {
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
 
+  // Start the gateway sidecar. Do not block window creation on it; failures are
+  // logged and the supervisor retries with backoff.
+  gateway.start().catch((err) => {
+    console.error('[gateway] failed to start:', err)
+  })
+
   createWindow()
 
   app.on('activate', function () {
@@ -68,6 +78,11 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+// Kill the gateway sidecar before the app exits so it never outlives us.
+app.on('before-quit', () => {
+  gateway.stop()
 })
 
 // In this file you can include the rest of your app's specific main process
