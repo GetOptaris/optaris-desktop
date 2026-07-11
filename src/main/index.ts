@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { GatewayManager } from './gateway'
 import { ensureConfig, ensureDataDir } from './config'
+import { registerGatewayIpc } from './ipc'
 
 // The optaris-gateway sidecar: spawned on ready, killed on quit.
 const gateway = new GatewayManager()
@@ -56,6 +57,11 @@ app.whenReady().then(() => {
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
+
+  // Control-plane IPC: the renderer talks to the gateway and its config only through
+  // these handlers. Registered before the window loads so the first renderer call
+  // always finds them.
+  registerGatewayIpc(gateway)
 
   // Prepare the gateway's config file and data dir, then start the sidecar. The
   // config must exist before the gateway spawns (it loads it at startup), so we

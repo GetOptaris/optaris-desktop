@@ -216,4 +216,15 @@ export class GatewayManager {
   whenReady(): Promise<number> {
     return this.readyPromise
   }
+
+  /**
+   * Resolve the base URL clients point their base_url at. Uses the live port when the
+   * gateway is ready; otherwise waits for the first successful handshake. The port is
+   * fixed across restarts, so a transient null during a restart still resolves to the
+   * correct URL.
+   */
+  async resolveBaseUrl(): Promise<string> {
+    const port = this.port ?? (await this.readyPromise)
+    return `http://${this.host}:${port}`
+  }
 }
