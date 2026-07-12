@@ -12,6 +12,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -21,6 +22,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -111,7 +113,7 @@ func main() {
 	emitReady(*host, boundPort)
 	log.Printf("listening on %s:%d (pid=%d)", *host, boundPort, os.Getpid())
 
-	srv := &http.Server{Handler: mux}
+	srv := &http.Server{Handler: withAuth(holder, mux)}
 
 	// Shutdown is triggered by SIGINT/SIGTERM or by the parent-watchdog. Calling the
 	// stop func returned by NotifyContext also cancels ctx.
@@ -174,6 +176,62 @@ func withRoute(holder *configHolder, next http.Handler) http.Handler {
 		rc := optaris.RouteContext{GroupID: holder.defaultGroupID()}
 		next.ServeHTTP(w, r.WithContext(optaris.WithRoute(r.Context(), rc)))
 	})
+}
+
+// withAuth gates every inbound request on the single client-facing API key from the
+// config. The key is read per request from the holder so hot-reload (and the
+// dashboard's regenerate button) take effect live. An empty configured key disables
+// the check — the gateway is open, matching the pre-auth behavior.
+//
+// This is the gateway's trust boundary against other local processes blindly probing
+// 127.0.0.1: it only verifies, it does not mutate the request. The engine sets its
+// own upstream credentials downstream, so the presented client key is never forwarded.
+func withAuth(holder *configHolder, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		want := holder.apiKey()
+		if want == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		got := presentedKey(r)
+		// Constant-time compare to avoid leaking the key via timing.
+		if got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
+			writeUnauthorized(w)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// presentedKey extracts the client-supplied key, covering the conventions of all four
+// inbound formats: OpenAI/Claude `Authorization: Bearer <k>`, Anthropic `x-api-key`,
+// Gemini `x-goog-api-key` header or `?key=<k>` query. The first non-empty one wins.
+func presentedKey(r *http.Request) string {
+	if h := r.Header.Get("Authorization"); h != "" {
+		if rest, ok := strings.CutPrefix(h, "Bearer "); ok {
+			if k := strings.TrimSpace(rest); k != "" {
+				return k
+			}
+		}
+	}
+	if k := strings.TrimSpace(r.Header.Get("x-api-key")); k != "" {
+		return k
+	}
+	if k := strings.TrimSpace(r.Header.Get("x-goog-api-key")); k != "" {
+		return k
+	}
+	if k := strings.TrimSpace(r.URL.Query().Get("key")); k != "" {
+		return k
+	}
+	return ""
+}
+
+// writeUnauthorized replies with a 401 and a small OpenAI-shaped error body so clients
+// surface a readable message.
+func writeUnauthorized(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	_, _ = w.Write([]byte(`{"error":{"message":"invalid api key","type":"unauthorized"}}`))
 }
 
 // emitReady writes the readiness handshake as a single JSON line to stdout.

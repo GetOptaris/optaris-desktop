@@ -59,10 +59,15 @@ type wireGroup struct {
 type gatewayConfig struct {
 	// DefaultGroupID is the group every request routes to until per-request auth /
 	// tenancy resolution lands (phase 3). Empty → fall back to the first group.
-	DefaultGroupID string          `json:"default_group_id"`
-	Channels       []wireChannel   `json:"channels"`
-	Groups         []wireGroup     `json:"groups"`
-	Settings       json.RawMessage `json:"settings"`
+	DefaultGroupID string `json:"default_group_id"`
+	// GatewayAPIKey is the single client-facing key inbound requests must present
+	// (see withAuth in main.go). Empty disables the check. This is NOT an upstream
+	// credential — it is the local gateway's own admission key, distinct from the
+	// per-channel APIKeys below.
+	GatewayAPIKey string          `json:"gateway_api_key"`
+	Channels      []wireChannel   `json:"channels"`
+	Groups        []wireGroup     `json:"groups"`
+	Settings      json.RawMessage `json:"settings"`
 }
 
 // configMeta holds the derived, request-time-relevant bits of a loaded config that
@@ -71,6 +76,7 @@ type gatewayConfig struct {
 // belt-and-suspenders redaction list). Held atomically so hot-reload is lock-free.
 type configMeta struct {
 	defaultGroupID string
+	apiKey         string
 	secrets        []string
 }
 
@@ -128,6 +134,7 @@ func loadConfig(path string) (optaris.Config, configMeta, error) {
 	cfg := optaris.Config{Groups: groups, Channels: channels, Settings: s}
 	meta := configMeta{
 		defaultGroupID: resolveDefaultGroup(gc.DefaultGroupID, groups),
+		apiKey:         gc.GatewayAPIKey,
 		secrets:        secrets,
 	}
 	return cfg, meta, nil
@@ -163,6 +170,10 @@ func (h *configHolder) set(m configMeta) { h.p.Store(&m) }
 
 // defaultGroupID returns the group id the routing middleware injects per request.
 func (h *configHolder) defaultGroupID() string { return h.p.Load().defaultGroupID }
+
+// apiKey returns the current client-facing admission key the auth middleware checks
+// inbound requests against. Empty means the check is disabled (open gateway).
+func (h *configHolder) apiKey() string { return h.p.Load().apiKey }
 
 // secrets returns the current set of plaintext upstream APIKeys, used only to
 // double-check they never leak into on-disk capture.

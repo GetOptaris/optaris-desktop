@@ -3,7 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { GatewayManager } from './gateway'
-import { ensureConfig, ensureDataDir } from './config'
+import { ensureConfig, ensureDataDir, ensureGatewayApiKey } from './config'
 import { registerGatewayIpc } from './ipc'
 
 // The optaris-gateway sidecar: spawned on ready, killed on quit.
@@ -68,7 +68,11 @@ app.whenReady().then(() => {
   // await those two quick fs ops; the gateway start itself is not awaited — failures
   // are logged and the supervisor retries with backoff, without blocking the window.
   ensureConfig()
-    .then((configPath) => Promise.all([Promise.resolve(configPath), ensureDataDir()]))
+    .then((configPath) =>
+      // ensureGatewayApiKey backfills a key for pre-auth configs so the sidecar always
+      // spawns already protected. It reads/writes the config, so run it before start.
+      Promise.all([Promise.resolve(configPath), ensureDataDir(), ensureGatewayApiKey()])
+    )
     .then(([configPath, dataDir]) => gateway.start({ configPath, dataDir }))
     .catch((err) => {
       console.error('[gateway] failed to start:', err)

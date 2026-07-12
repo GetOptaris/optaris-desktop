@@ -23,7 +23,10 @@ const en = {
     saveFailed: 'Save failed',
     saveSuccess: 'Configuration saved',
     baseUrlCopied: 'Base URL copied',
-    copyFailed: 'Copy failed'
+    copyFailed: 'Copy failed',
+    apiKeyCopied: 'API key copied',
+    apiKeyRegenerated: 'New API key generated',
+    apiKeyRegenerateFailed: 'Failed to generate a new API key'
   },
   dashboard: {
     subtitle: 'Overview of your local gateway and how to get started.',
@@ -33,7 +36,13 @@ const en = {
     starting: 'starting…',
     apiKeyLabel: 'API Key',
     apiKeyNote:
-      'This local gateway doesn’t verify an API key, but most clients require one — just enter any value (e.g. optaris).',
+      'Clients must send this key on every request (Authorization: Bearer, x-api-key, or x-goog-api-key). Requests without it are rejected.',
+    apiKeyReveal: 'Reveal API key',
+    apiKeyHide: 'Hide API key',
+    apiKeyRegenerate: 'Regenerate',
+    apiKeyRegenerateConfirm:
+      'Regenerate the key? Existing clients will stop working until updated.',
+    apiKeyRegenerateCancel: 'Cancel',
     overviewTitle: 'Overview',
     channelsCount: 'Channels',
     groupsCount: 'Groups',

@@ -21,7 +21,10 @@ const zh: Dict = {
     saveFailed: '保存失败',
     saveSuccess: '配置已保存',
     baseUrlCopied: '网关地址已复制',
-    copyFailed: '复制失败'
+    copyFailed: '复制失败',
+    apiKeyCopied: 'API Key 已复制',
+    apiKeyRegenerated: '已生成新的 API Key',
+    apiKeyRegenerateFailed: '生成新 API Key 失败'
   },
   dashboard: {
     subtitle: '本地网关概况与上手指引。',
@@ -31,7 +34,12 @@ const zh: Dict = {
     starting: '启动中…',
     apiKeyLabel: 'API Key',
     apiKeyNote:
-      '本地网关不校验 API Key，但大多数客户端要求必填 —— 随便填一个值即可（例如 optaris）。',
+      '客户端每次请求都必须携带此 Key（Authorization: Bearer、x-api-key 或 x-goog-api-key）。未携带的请求会被拒绝。',
+    apiKeyReveal: '显示 API Key',
+    apiKeyHide: '隐藏 API Key',
+    apiKeyRegenerate: '重新生成',
+    apiKeyRegenerateConfirm: '确定重新生成？现有客户端在更新之前将无法使用。',
+    apiKeyRegenerateCancel: '取消',
     overviewTitle: '概览',
     channelsCount: '渠道',
     groupsCount: '分组',

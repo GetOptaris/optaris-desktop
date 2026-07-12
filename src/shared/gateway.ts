@@ -53,6 +53,12 @@ export interface DisplaySettings {
 /** Sanitized config returned by getConfig — safe to hold in the renderer. */
 export interface DisplayConfig {
   default_group_id?: string
+  /**
+   * The client-facing gateway key, in full. Unlike a channel key (stripped to a
+   * has_api_key flag), this one is meant to be shown and copied by the user — it is
+   * the local gateway's admission credential, not an upstream secret.
+   */
+  gateway_api_key: string
   channels: DisplayChannel[]
   groups: DisplayGroup[]
   settings: DisplaySettings
@@ -141,6 +147,8 @@ export interface GatewayApi {
   updateConfig: (config: ConfigInput) => Promise<void>
   /** Query the request-summary log, newest first. */
   queryLogs: (params?: LogQuery) => Promise<LogRow[]>
+  /** Replace the gateway's client-facing API key and return the new value. */
+  regenerateApiKey: () => Promise<string>
 }
 
 /**
@@ -151,5 +159,6 @@ export const GATEWAY_IPC = {
   getBaseUrl: 'gateway:get-base-url',
   getConfig: 'gateway:get-config',
   updateConfig: 'gateway:update-config',
-  queryLogs: 'gateway:query-logs'
+  queryLogs: 'gateway:query-logs',
+  regenerateApiKey: 'gateway:regenerate-api-key'
 } as const
