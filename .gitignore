@@ -5,3 +5,6 @@ out
 .eslintcache
 *.log*
 /.idea/
+
+# Compiled gateway sidecar binaries (built by scripts/build-gateway.sh)
+/resources/bin/

@@ -9,8 +9,18 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  # The gateway sidecar ships via extraResources (below), not inside the asar.
+  # Excluding it here keeps the ~10-20MB binary from being packed twice.
+  - '!resources/bin/**'
 asarUnpack:
   - resources/**
+# Ship the compiled gateway sidecar outside the asar, into <resources>/bin. This
+# maps to process.resourcesPath/bin, which is exactly the packaged path that
+# resolveBinaryPath() in src/main/gateway.ts looks the binary up at. Build the
+# binary first via the build:gateway:<os> scripts so this directory exists.
+extraResources:
+  - from: resources/bin
+    to: bin
 win:
   executableName: optaris-desktop
 nsis:
@@ -25,9 +35,16 @@ mac:
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+  # Signing the app also deep-signs the embedded gateway binary under Resources/bin
+  # (hardened runtime). entitlements.mac.plist grants disable-library-validation for
+  # that case. Notarization stays off so credential-less local packaging is not
+  # blocked; enable it (and provide APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD /
+  # APPLE_TEAM_ID, or an API key) for distribution builds.
   notarize: false
 dmg:
-  artifactName: ${name}-${version}.${ext}
+  # ${arch} keeps the arm64 and x64 DMGs from overwriting each other, since macOS is
+  # shipped as two separate per-arch artifacts rather than a universal build.
+  artifactName: ${name}-${version}-${arch}.${ext}
 linux:
   target:
     - AppImage
