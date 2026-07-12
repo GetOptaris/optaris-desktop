@@ -17,9 +17,7 @@ const en = {
     reset: 'Reset',
     unsavedChanges: 'Unsaved changes',
     loading: 'Loading…',
-    none: 'None',
-    copy: 'Copy',
-    copied: 'Copied'
+    none: 'None'
   },
   toast: {
     saveFailed: 'Save failed',

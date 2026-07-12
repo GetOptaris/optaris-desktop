@@ -88,6 +88,8 @@ export function ModelsInput({ value, onChange, id }: ModelsInputProps): React.JS
           onChange={(e) => {
             setText(e.target.value)
             setActiveIndex(-1)
+            // Escape closes the list without blurring; typing again should reopen it.
+            setFocused(true)
           }}
           onKeyDown={handleKeyDown}
           onFocus={() => setFocused(true)}

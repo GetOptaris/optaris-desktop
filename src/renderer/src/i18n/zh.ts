@@ -15,9 +15,7 @@ const zh: Dict = {
     reset: '重置',
     unsavedChanges: '有未保存的更改',
     loading: '加载中…',
-    none: '无',
-    copy: '复制',
-    copied: '已复制'
+    none: '无'
   },
   toast: {
     saveFailed: '保存失败',
