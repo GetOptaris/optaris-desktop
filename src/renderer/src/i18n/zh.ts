@@ -128,7 +128,13 @@ const zh: Dict = {
     channel: '渠道',
     tokensIn: '输入',
     tokensOut: '输出',
-    empty: '还没有请求记录。'
+    empty: '还没有请求记录。',
+    outcomes: {
+      success: '成功',
+      failed: '失败',
+      client_canceled: '客户端取消',
+      rejected: '已拒绝'
+    }
   }
 }
 

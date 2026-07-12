@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCwIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
+import type { TFunction } from '@/i18n'
 import type { LogQuery, LogRow } from '../../../shared/gateway'
 
 const ALL = '__all__'
@@ -40,6 +41,14 @@ function outcomeBadgeClass(outcome: string | null): string {
   }
 }
 
+/** Localize a known outcome; fall back to the raw value for anything unmapped, and '—' for null. */
+function outcomeLabel(t: TFunction, outcome: string | null): string {
+  if (!outcome) return '—'
+  const key = `logs.outcomes.${outcome}`
+  const label = t(key)
+  return label === key ? outcome : label
+}
+
 function fmtTime(at: number): string {
   if (!Number.isFinite(at)) return '—'
   return new Date(at).toLocaleString()
@@ -56,6 +65,16 @@ export function LogsPanel(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [outcome, setOutcome] = useState<string>(ALL)
   const [model, setModel] = useState('')
+
+  // Drives both the trigger label (Base UI's `items`) and the dropdown options, so a
+  // closed Select shows the localized label instead of the raw value (see issue #4).
+  const outcomeItems = useMemo<Record<string, React.ReactNode>>(
+    () => ({
+      [ALL]: t('logs.allOutcomes'),
+      ...Object.fromEntries(OUTCOMES.map((o) => [o, outcomeLabel(t, o)]))
+    }),
+    [t]
+  )
 
   const runQuery = useCallback(async (filters: { outcome: string; model: string }) => {
     setLoading(true)
@@ -95,7 +114,7 @@ export function LogsPanel(): React.JSX.Element {
         top and full width; sticky top-0 then keeps it flush while rows scroll under it.
       */}
       <div className="sticky top-0 z-20 -mx-6 -mt-6 flex flex-wrap items-center gap-2 border-b bg-background px-6 pt-6 pb-3">
-        <Select value={outcome} onValueChange={onOutcomeChange}>
+        <Select value={outcome} onValueChange={onOutcomeChange} items={outcomeItems}>
           <SelectTrigger className="w-44">
             <SelectValue placeholder={t('logs.outcomePlaceholder')} />
           </SelectTrigger>
@@ -103,7 +122,7 @@ export function LogsPanel(): React.JSX.Element {
             <SelectItem value={ALL}>{t('logs.allOutcomes')}</SelectItem>
             {OUTCOMES.map((o) => (
               <SelectItem key={o} value={o}>
-                {o}
+                {outcomeLabel(t, o)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -163,7 +182,7 @@ export function LogsPanel(): React.JSX.Element {
                   </TableCell>
                   <TableCell>
                     <Badge className={cn('font-normal', outcomeBadgeClass(r.outcome))}>
-                      {r.outcome ?? '—'}
+                      {outcomeLabel(t, r.outcome)}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{fmtNum(r.http_status)}</TableCell>
