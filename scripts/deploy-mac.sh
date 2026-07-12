@@ -17,8 +17,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Make the locally-installed CLIs resolvable even when run directly (not via pnpm).
 export PATH="$ROOT/node_modules/.bin:$PATH"
 
-APP_NAME="optaris-desktop"
-APP_ID="com.electron.app"
+APP_NAME="Optaris"
+APP_ID="com.getoptaris.desktop"
 SRC="$ROOT/dist/mac-arm64/$APP_NAME.app"
 DEST="/Applications/$APP_NAME.app"
 

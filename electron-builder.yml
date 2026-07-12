@@ -1,5 +1,6 @@
-appId: com.electron.app
-productName: optaris-desktop
+appId: com.getoptaris.desktop
+productName: Optaris
+copyright: Copyright © 2026 GetOptaris
 directories:
   buildResources: build
 files:
@@ -22,7 +23,7 @@ extraResources:
   - from: resources/bin
     to: bin
 win:
-  executableName: optaris-desktop
+  executableName: Optaris
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
@@ -50,11 +51,13 @@ linux:
     - AppImage
     - snap
     - deb
-  maintainer: electronjs.org
+  maintainer: GetOptaris <support@getoptaris.com>
+  description: Local LLM gateway desktop app — route OpenAI/Claude/Gemini traffic across your upstream providers.
   category: Utility
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
 publish:
-  provider: generic
-  url: https://example.com/auto-updates
+  provider: github
+  owner: GetOptaris
+  repo: optaris-desktop
