@@ -144,6 +144,12 @@ export interface UseGatewayConfig {
   /** Persist the draft. Resolves to null on success, or an error message on failure. */
   save: () => Promise<string | null>
   setDefaultGroupId: (id: string) => void
+  /**
+   * Reflect a freshly regenerated gateway key into the draft. Display-only: it does not
+   * mark the draft dirty (the key is already persisted by the regenerate IPC) and skips a
+   * full reload, so any unsaved Channels/Groups edits are preserved.
+   */
+  setGatewayApiKey: (key: string) => void
   updateSettings: (patch: Partial<DisplaySettings>) => void
   addChannel: () => string
   updateChannel: (id: string, patch: Partial<ChannelDraft>) => void
@@ -221,6 +227,12 @@ export function useGatewayConfig(): UseGatewayConfig {
     (id: string) => edit((d) => ({ ...d, default_group_id: id })),
     [edit]
   )
+
+  // Not routed through `edit`: the gateway key is persisted directly by the regenerate
+  // IPC and is never part of buildInput, so it must not flip `dirty` or trigger a save.
+  const setGatewayApiKey = useCallback((key: string) => {
+    setDraft((prev) => (prev ? { ...prev, gateway_api_key: key } : prev))
+  }, [])
 
   const updateSettings = useCallback(
     (patch: Partial<DisplaySettings>) =>
@@ -339,6 +351,7 @@ export function useGatewayConfig(): UseGatewayConfig {
     reload,
     save,
     setDefaultGroupId,
+    setGatewayApiKey,
     updateSettings,
     addChannel,
     updateChannel,

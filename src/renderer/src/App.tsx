@@ -130,7 +130,11 @@ function App(): React.JSX.Element {
           ) : null}
 
           {tab === 'dashboard' && draft ? (
-            <DashboardPanel draft={draft} onNavigate={setTab} />
+            <DashboardPanel
+              draft={draft}
+              onNavigate={setTab}
+              onRegenerateApiKey={config.setGatewayApiKey}
+            />
           ) : null}
 
           {tab === 'channels' && draft ? (

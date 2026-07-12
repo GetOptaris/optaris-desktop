@@ -13,9 +13,15 @@ export type NavigableTab = 'channels' | 'groups' | 'settings'
 interface DashboardPanelProps {
   draft: ConfigDraft
   onNavigate: (tab: NavigableTab) => void
+  /** Reflect a regenerated gateway key back into the shared draft (see useGatewayConfig). */
+  onRegenerateApiKey: (key: string) => void
 }
 
-export function DashboardPanel({ draft, onNavigate }: DashboardPanelProps): React.JSX.Element {
+export function DashboardPanel({
+  draft,
+  onNavigate,
+  onRegenerateApiKey
+}: DashboardPanelProps): React.JSX.Element {
   const t = useT()
   const defaultGroup = draft.groups.find((g) => g.id === draft.default_group_id)
 
@@ -23,7 +29,7 @@ export function DashboardPanel({ draft, onNavigate }: DashboardPanelProps): Reac
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">{t('dashboard.subtitle')}</p>
 
-      <GatewayCard t={t} apiKey={draft.gateway_api_key} />
+      <GatewayCard t={t} apiKey={draft.gateway_api_key} onRegenerate={onRegenerateApiKey} />
 
       <Card>
         <CardHeader>
@@ -80,19 +86,21 @@ function maskKey(key: string): string {
 
 function GatewayCard({
   t,
-  apiKey
+  apiKey,
+  onRegenerate: onRegenerateKey
 }: {
   t: (key: string) => string
   apiKey: string
+  onRegenerate: (key: string) => void
 }): React.JSX.Element {
   const [baseUrl, setBaseUrl] = useState('')
   const [copied, setCopied] = useState(false)
 
-  // The regenerate action writes the key directly (bypassing the shared draft/Save), so
-  // we hold the new value locally rather than reloading — that keeps any unsaved edits on
-  // the Channels/Groups tabs intact. `override` wins over the draft-provided prop once set.
-  const [override, setOverride] = useState<string | null>(null)
-  const key = override ?? apiKey
+  // The regenerate action persists the key directly (bypassing the shared draft/Save) and
+  // reflects it back into the draft via onRegenerateKey rather than triggering a reload —
+  // that keeps any unsaved edits on the Channels/Groups tabs intact. So `apiKey` (from the
+  // draft) stays the single source of truth and survives this card unmounting on tab switch.
+  const key = apiKey
 
   const [revealed, setRevealed] = useState(false)
   const [keyCopied, setKeyCopied] = useState(false)
@@ -140,7 +148,7 @@ function GatewayCard({
     setRegenerating(true)
     try {
       const next = await window.api.gateway.regenerateApiKey()
-      setOverride(next)
+      onRegenerateKey(next)
       setRevealed(true)
       toast.success(t('toast.apiKeyRegenerated'))
     } catch {
