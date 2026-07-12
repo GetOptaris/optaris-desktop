@@ -1,11 +1,5 @@
 import { Badge } from '@/components/ui/badge'
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { fmtNum, fmtTime, outcomeBadgeClass, outcomeLabel } from '@/lib/log-format'
 import { useT } from '@/i18n'
@@ -164,8 +158,8 @@ export function LogTraceDialog({
 
   return (
     <Dialog open={row !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader className="grid gap-3">
+      <DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
+        <DialogHeader className="grid shrink-0 gap-3 border-b px-6 py-4 pr-10">
           <DialogTitle>{t('logs.detail.title')}</DialogTitle>
           {row ? (
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
@@ -183,7 +177,7 @@ export function LogTraceDialog({
           ) : null}
         </DialogHeader>
 
-        <DialogBody className="grid gap-5">
+        <div className="grid min-h-0 flex-1 gap-5 overflow-y-auto px-6 py-4">
           {loading ? (
             <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
           ) : trace ? (
@@ -215,7 +209,7 @@ export function LogTraceDialog({
               <p className="text-sm text-muted-foreground">{t('logs.detail.noCaptureHint')}</p>
             </div>
           )}
-        </DialogBody>
+        </div>
       </DialogContent>
     </Dialog>
   )
