@@ -23,6 +23,8 @@ export interface ChannelDraft {
   name: string
   base_url: string
   has_api_key: boolean
+  /** Masked preview of the stored key (e.g. `sk-1234****cdef`); undefined for new channels. */
+  api_key_preview?: string
   /** Plaintext key typed this session; '' means "leave the stored key untouched". */
   api_key_input: string
   models: string[]
@@ -53,6 +55,7 @@ function channelToDraft(c: DisplayChannel): ChannelDraft {
     name: c.name,
     base_url: c.base_url,
     has_api_key: c.has_api_key,
+    api_key_preview: c.api_key_preview,
     api_key_input: '',
     models: c.models ?? [],
     price_weight: c.price_weight,

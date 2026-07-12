@@ -89,7 +89,12 @@ export function LogsPanel(): React.JSX.Element {
 
   return (
     <div className="flex min-h-0 flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2">
+      {/*
+        Pinned filter bar. The shared content scroller (App.tsx) has p-6 padding, so the
+        negative -mx-6/-mt-6 + matching px-6/pt-6 bleed the bar's background to the very
+        top and full width; sticky top-0 then keeps it flush while rows scroll under it.
+      */}
+      <div className="sticky top-0 z-20 -mx-6 -mt-6 flex flex-wrap items-center gap-2 border-b bg-background px-6 pt-6 pb-3">
         <Select value={outcome} onValueChange={onOutcomeChange}>
           <SelectTrigger className="w-44">
             <SelectValue placeholder={t('logs.outcomePlaceholder')} />

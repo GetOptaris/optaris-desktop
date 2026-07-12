@@ -31,6 +31,9 @@ const en = {
     gatewayDescription: 'Point your client’s base URL at this address.',
     baseUrl: 'Base URL',
     starting: 'starting…',
+    apiKeyLabel: 'API Key',
+    apiKeyNote:
+      'This local gateway doesn’t verify an API key, but most clients require one — just enter any value (e.g. optaris).',
     overviewTitle: 'Overview',
     channelsCount: 'Channels',
     groupsCount: 'Groups',
@@ -63,7 +66,7 @@ const en = {
     baseUrl: 'Base URL',
     baseUrlPlaceholder: 'https://api.openai.com/v1',
     apiKey: 'API Key',
-    apiKeyStoredHint: 'A key is stored. Leave blank to keep it.',
+    apiKeyStoredHint: 'Stored key {preview}. Leave blank to keep it.',
     apiKeySavedPlaceholder: 'Saved — leave blank to keep',
     apiKeyEnterPlaceholder: 'Enter API key',
     models: 'Models',

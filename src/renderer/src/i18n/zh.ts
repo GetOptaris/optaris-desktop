@@ -29,6 +29,9 @@ const zh: Dict = {
     gatewayDescription: '把客户端的 base URL 指向此地址。',
     baseUrl: '网关地址',
     starting: '启动中…',
+    apiKeyLabel: 'API Key',
+    apiKeyNote:
+      '本地网关不校验 API Key，但大多数客户端要求必填 —— 随便填一个值即可（例如 optaris）。',
     overviewTitle: '概览',
     channelsCount: '渠道',
     groupsCount: '分组',
@@ -61,7 +64,7 @@ const zh: Dict = {
     baseUrl: 'Base URL',
     baseUrlPlaceholder: 'https://api.openai.com/v1',
     apiKey: 'API Key',
-    apiKeyStoredHint: '已保存密钥。留空表示保持不变。',
+    apiKeyStoredHint: '已保存密钥 {preview}，留空表示保持不变。',
     apiKeySavedPlaceholder: '已保存 — 留空保持不变',
     apiKeyEnterPlaceholder: '输入 API Key',
     models: '模型',

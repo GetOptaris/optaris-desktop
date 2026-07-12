@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
   LayoutDashboardIcon,
@@ -34,6 +34,18 @@ function App(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('dashboard')
   const config = useGatewayConfig()
   const { draft } = config
+
+  // After a channel is duplicated, bring the freshly inserted card into view (it lands
+  // right below the source, often off-screen). Runs after commit so the card is in the DOM.
+  const [scrollTarget, setScrollTarget] = useState<string | null>(null)
+  useEffect(() => {
+    if (!scrollTarget) return
+    document
+      .getElementById(`channel-${scrollTarget}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setScrollTarget(null)
+  }, [scrollTarget])
 
   const isConfigTab = tab === 'channels' || tab === 'groups' || tab === 'settings'
   const needsDraft = tab !== 'logs'
@@ -126,7 +138,9 @@ function App(): React.JSX.Element {
               channels={draft.channels}
               onAdd={config.addChannel}
               onUpdate={config.updateChannel}
-              onDuplicate={(id) => config.duplicateChannel(id, t('channels.copySuffix'))}
+              onDuplicate={(id) =>
+                setScrollTarget(config.duplicateChannel(id, t('channels.copySuffix')))
+              }
               onRemove={config.removeChannel}
             />
           ) : null}
