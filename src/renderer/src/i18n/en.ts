@@ -130,7 +130,13 @@ const en = {
     channel: 'Channel',
     tokensIn: 'In',
     tokensOut: 'Out',
-    empty: 'No requests recorded yet.'
+    empty: 'No requests recorded yet.',
+    outcomes: {
+      success: 'Success',
+      failed: 'Failed',
+      client_canceled: 'Client canceled',
+      rejected: 'Rejected'
+    }
   }
 }
 
