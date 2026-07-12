@@ -72,10 +72,9 @@ export function SettingsPanel({
               <SelectValue placeholder={t('settings.defaultGroupPlaceholder')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={NO_GROUP}>{t('common.none')}</SelectItem>
-              {groups.map((g) => (
-                <SelectItem key={g.id} value={g.id}>
-                  {g.name || t('groups.unnamed')}
+              {Object.entries(groupItems).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
                 </SelectItem>
               ))}
             </SelectContent>

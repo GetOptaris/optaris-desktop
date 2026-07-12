@@ -119,10 +119,9 @@ export function LogsPanel(): React.JSX.Element {
             <SelectValue placeholder={t('logs.outcomePlaceholder')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('logs.allOutcomes')}</SelectItem>
-            {OUTCOMES.map((o) => (
-              <SelectItem key={o} value={o}>
-                {outcomeLabel(t, o)}
+            {Object.entries(outcomeItems).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
               </SelectItem>
             ))}
           </SelectContent>
