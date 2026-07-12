@@ -138,6 +138,9 @@ const en = {
     model: 'Model',
     channel: 'Channel',
     tokensIn: 'In',
+    cacheRead: 'Cache R',
+    cacheWrite5m: 'Cache W 5m',
+    cacheWrite1h: 'Cache W 1h',
     tokensOut: 'Out',
     empty: 'No requests recorded yet.',
     outcomes: {
@@ -145,6 +148,26 @@ const en = {
       failed: 'Failed',
       client_canceled: 'Client canceled',
       rejected: 'Rejected'
+    },
+    detail: {
+      title: 'Request details',
+      reqId: 'Request ID',
+      close: 'Close',
+      clientRequest: 'Client → Gateway',
+      upstreamRequest: 'Gateway → Upstream',
+      upstreamResponse: 'Upstream → Gateway',
+      headers: 'Headers',
+      body: 'Body',
+      url: 'URL',
+      attempt: 'Attempt {n}',
+      emptyBody: '(empty)',
+      truncated: 'Response body truncated to the capture size limit.',
+      headersRedacted: 'Authorization / API-key headers are redacted.',
+      strippedUsage: 'Usage stripped from the client-visible stream.',
+      committedThenFailed: 'Committed to the client, then the upstream failed mid-stream.',
+      noCaptureTitle: 'No capture recorded for this request.',
+      noCaptureHint:
+        'Enable “Request capture” in Settings and set the mode to “All requests” to record full round-trips.'
     }
   }
 }

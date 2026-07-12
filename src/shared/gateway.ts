@@ -137,6 +137,54 @@ export interface LogRow {
   reasoning_tokens: number | null
 }
 
+/** Identifies one request when fetching its raw capture (see queryTrace). */
+export interface TraceQuery {
+  req_id: string
+  /** The row's `at` (unix ms); used to locate the day-rolling capture file. */
+  at: number
+}
+
+/**
+ * One upstream attempt within a trace: the gateway→upstream request (B) and the
+ * upstream→gateway response (C). Mirrors gateway/store.go's attemptRecord. Headers are
+ * `name -> values` (Go's http.Header); auth material is already redacted. Bodies are
+ * plaintext strings and may be truncated (see resp_body_truncated).
+ */
+export interface TraceAttempt {
+  channel_id: string
+  model: string
+  upstream_url: string
+  req_headers: Record<string, string[]> | null
+  req_body: string
+  resp_status: number
+  resp_headers: Record<string, string[]> | null
+  resp_body: string
+  resp_body_truncated: boolean
+  success: boolean
+  failure_class: string
+  passed_commit: boolean
+}
+
+/**
+ * The full raw capture for a single request: the client→gateway request (A) plus one
+ * TraceAttempt per upstream try. Mirrors gateway/store.go's captureRecord. Only present
+ * when capture was enabled for this request (see queryTrace, which returns null otherwise).
+ */
+export interface TraceRecord {
+  req_id: string
+  at: number
+  group_id: string
+  model: string
+  stream: boolean
+  outcome: string
+  http_status: number
+  req_headers: Record<string, string[]> | null
+  req_body: string
+  attempts: TraceAttempt[]
+  stripped_usage: boolean
+  committed_then_failed: boolean
+}
+
 /** The gateway control-plane surface exposed on `window.api.gateway`. */
 export interface GatewayApi {
   /** Base URL clients point their base_url at (http://127.0.0.1:<port>). */
@@ -147,6 +195,8 @@ export interface GatewayApi {
   updateConfig: (config: ConfigInput) => Promise<void>
   /** Query the request-summary log, newest first. */
   queryLogs: (params?: LogQuery) => Promise<LogRow[]>
+  /** Read one request's raw capture (client/upstream headers+bodies). Null when none was recorded. */
+  queryTrace: (params: TraceQuery) => Promise<TraceRecord | null>
   /** Replace the gateway's client-facing API key and return the new value. */
   regenerateApiKey: () => Promise<string>
 }
@@ -160,5 +210,6 @@ export const GATEWAY_IPC = {
   getConfig: 'gateway:get-config',
   updateConfig: 'gateway:update-config',
   queryLogs: 'gateway:query-logs',
+  queryTrace: 'gateway:query-trace',
   regenerateApiKey: 'gateway:regenerate-api-key'
 } as const

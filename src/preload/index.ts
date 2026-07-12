@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { GATEWAY_IPC } from '../shared/gateway'
-import type { ConfigInput, GatewayApi, LogQuery } from '../shared/gateway'
+import type { ConfigInput, GatewayApi, LogQuery, TraceQuery } from '../shared/gateway'
 
 // Custom APIs for renderer. The gateway namespace is a thin proxy: every call is an
 // ipcRenderer.invoke to a main-process handler. The renderer never touches the config
@@ -11,6 +11,7 @@ const gateway: GatewayApi = {
   getConfig: () => ipcRenderer.invoke(GATEWAY_IPC.getConfig),
   updateConfig: (config: ConfigInput) => ipcRenderer.invoke(GATEWAY_IPC.updateConfig, config),
   queryLogs: (params?: LogQuery) => ipcRenderer.invoke(GATEWAY_IPC.queryLogs, params),
+  queryTrace: (params: TraceQuery) => ipcRenderer.invoke(GATEWAY_IPC.queryTrace, params),
   regenerateApiKey: () => ipcRenderer.invoke(GATEWAY_IPC.regenerateApiKey)
 }
 
