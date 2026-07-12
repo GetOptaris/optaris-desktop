@@ -19,6 +19,7 @@ import {
   TableRow
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
+import { useT } from '@/i18n'
 import type { LogQuery, LogRow } from '../../../shared/gateway'
 
 const ALL = '__all__'
@@ -49,6 +50,7 @@ function fmtNum(n: number | null): string {
 }
 
 export function LogsPanel(): React.JSX.Element {
+  const t = useT()
   const [rows, setRows] = useState<LogRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -90,10 +92,10 @@ export function LogsPanel(): React.JSX.Element {
       <div className="flex flex-wrap items-center gap-2">
         <Select value={outcome} onValueChange={onOutcomeChange}>
           <SelectTrigger className="w-44">
-            <SelectValue placeholder="Outcome" />
+            <SelectValue placeholder={t('logs.outcomePlaceholder')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>All outcomes</SelectItem>
+            <SelectItem value={ALL}>{t('logs.allOutcomes')}</SelectItem>
             {OUTCOMES.map((o) => (
               <SelectItem key={o} value={o}>
                 {o}
@@ -108,17 +110,17 @@ export function LogsPanel(): React.JSX.Element {
           onKeyDown={(e) => {
             if (e.key === 'Enter') refresh()
           }}
-          placeholder="Filter by model…"
+          placeholder={t('logs.filterModel')}
           className="w-56"
         />
 
         <Button type="button" variant="outline" size="sm" onClick={refresh} disabled={loading}>
           <RefreshCwIcon className={cn('size-4', loading && 'animate-spin')} />
-          Refresh
+          {t('logs.refresh')}
         </Button>
 
         <span className="ml-auto text-xs text-muted-foreground">
-          {rows.length} {rows.length === 1 ? 'row' : 'rows'}
+          {rows.length} {rows.length === 1 ? t('logs.row') : t('logs.rows')}
         </span>
       </div>
 
@@ -132,20 +134,20 @@ export function LogsPanel(): React.JSX.Element {
         <Table>
           <TableHeader className="sticky top-0 z-10 bg-card">
             <TableRow>
-              <TableHead>Time</TableHead>
-              <TableHead>Outcome</TableHead>
-              <TableHead className="text-right">Status</TableHead>
-              <TableHead>Model</TableHead>
-              <TableHead>Channel</TableHead>
-              <TableHead className="text-right">In</TableHead>
-              <TableHead className="text-right">Out</TableHead>
+              <TableHead>{t('logs.time')}</TableHead>
+              <TableHead>{t('logs.outcome')}</TableHead>
+              <TableHead className="text-right">{t('logs.status')}</TableHead>
+              <TableHead>{t('logs.model')}</TableHead>
+              <TableHead>{t('logs.channel')}</TableHead>
+              <TableHead className="text-right">{t('logs.tokensIn')}</TableHead>
+              <TableHead className="text-right">{t('logs.tokensOut')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="h-24 text-center text-sm text-muted-foreground">
-                  {loading ? 'Loading…' : 'No requests recorded yet.'}
+                  {loading ? t('common.loading') : t('logs.empty')}
                 </TableCell>
               </TableRow>
             ) : (

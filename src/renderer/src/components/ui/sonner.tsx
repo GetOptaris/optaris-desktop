@@ -1,12 +1,13 @@
+import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
 
-// The desktop app has no theme switcher, so the toaster follows the OS color scheme
-// directly instead of pulling in next-themes.
 const Toaster = ({ ...props }: ToasterProps) => {
+  const { theme = "system" } = useTheme()
+
   return (
     <Sonner
-      theme="system"
+      theme={theme as ToasterProps["theme"]}
       className="toaster group"
       icons={{
         success: (
