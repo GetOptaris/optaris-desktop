@@ -1,6 +1,13 @@
 import { ipcMain } from 'electron'
 import { GATEWAY_IPC } from '../shared/gateway'
-import type { ConfigInput, DisplayConfig, LogQuery, LogRow } from '../shared/gateway'
+import type {
+  ConfigInput,
+  DisplayConfig,
+  LogQuery,
+  LogRow,
+  TraceQuery,
+  TraceRecord
+} from '../shared/gateway'
 import type { GatewayManager } from './gateway'
 import {
   mergeConfig,
@@ -11,6 +18,7 @@ import {
   writeConfig
 } from './config'
 import { queryLogs } from './logs'
+import { queryTrace } from './trace'
 
 /**
  * Wire the gateway control-plane IPC channels.
@@ -44,6 +52,13 @@ export function registerGatewayIpc(gateway: GatewayManager): void {
   ipcMain.handle(GATEWAY_IPC.queryLogs, (_event, params: LogQuery = {}): LogRow[] => {
     return queryLogs(params)
   })
+
+  // Read one request's raw capture (client/upstream headers+bodies) from the JSONL files.
+  // Null when capture was not recorded for that request.
+  ipcMain.handle(
+    GATEWAY_IPC.queryTrace,
+    (_event, params: TraceQuery): Promise<TraceRecord | null> => queryTrace(params)
+  )
 
   // Regenerate the single client-facing gateway API key and return the new value so the
   // dashboard can show it. The sidecar hot-reloads it on its own via mtime polling.

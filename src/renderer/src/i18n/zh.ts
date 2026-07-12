@@ -135,6 +135,9 @@ const zh: Dict = {
     model: '模型',
     channel: '渠道',
     tokensIn: '输入',
+    cacheRead: '缓存读',
+    cacheWrite5m: '缓存写 5m',
+    cacheWrite1h: '缓存写 1h',
     tokensOut: '输出',
     empty: '还没有请求记录。',
     outcomes: {
@@ -142,6 +145,25 @@ const zh: Dict = {
       failed: '失败',
       client_canceled: '客户端取消',
       rejected: '已拒绝'
+    },
+    detail: {
+      title: '请求详情',
+      reqId: '请求 ID',
+      close: '关闭',
+      clientRequest: '客户端 → 网关',
+      upstreamRequest: '网关 → 上游',
+      upstreamResponse: '上游 → 网关',
+      headers: '标头',
+      body: '消息体',
+      url: 'URL',
+      attempt: '尝试 {n}',
+      emptyBody: '（空）',
+      truncated: '响应体已按抓取大小上限截断。',
+      headersRedacted: 'Authorization / API-key 等敏感标头已脱敏。',
+      strippedUsage: '已从客户端可见的流中剥离 usage 信息。',
+      committedThenFailed: '已向客户端提交响应，随后上游在流中途失败。',
+      noCaptureTitle: '该请求没有抓取记录。',
+      noCaptureHint: '前往「设置」开启「请求抓取」并将模式设为「全部请求」，即可记录完整往返。'
     }
   }
 }

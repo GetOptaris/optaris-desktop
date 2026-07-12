@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCwIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,44 +19,15 @@ import {
   TableRow
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
+import { fmtNum, fmtTime, outcomeBadgeClass, outcomeLabel } from '@/lib/log-format'
 import { useT } from '@/i18n'
-import type { TFunction } from '@/i18n'
-import type { LogQuery, LogRow } from '../../../shared/gateway'
+import { LogTraceDialog } from './log-trace-dialog'
+import type { LogQuery, LogRow, TraceRecord } from '../../../shared/gateway'
 
 const ALL = '__all__'
 const OUTCOMES = ['success', 'failed', 'client_canceled', 'rejected'] as const
 
 const QUERY_LIMIT = 200
-
-function outcomeBadgeClass(outcome: string | null): string {
-  switch (outcome) {
-    case 'success':
-      return 'border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
-    case 'failed':
-      return 'border-transparent bg-destructive/15 text-destructive'
-    case 'rejected':
-      return 'border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-400'
-    default:
-      return 'border-transparent bg-muted text-muted-foreground'
-  }
-}
-
-/** Localize a known outcome; fall back to the raw value for anything unmapped, and '—' for null. */
-function outcomeLabel(t: TFunction, outcome: string | null): string {
-  if (!outcome) return '—'
-  const key = `logs.outcomes.${outcome}`
-  const label = t(key)
-  return label === key ? outcome : label
-}
-
-function fmtTime(at: number): string {
-  if (!Number.isFinite(at)) return '—'
-  return new Date(at).toLocaleString()
-}
-
-function fmtNum(n: number | null): string {
-  return typeof n === 'number' ? String(n) : '—'
-}
 
 export function LogsPanel(): React.JSX.Element {
   const t = useT()
@@ -65,6 +36,14 @@ export function LogsPanel(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [outcome, setOutcome] = useState<string>(ALL)
   const [model, setModel] = useState('')
+  // Row whose trace is being viewed (drives the detail dialog), plus its loaded capture.
+  const [selected, setSelected] = useState<LogRow | null>(null)
+  const [trace, setTrace] = useState<TraceRecord | null>(null)
+  const [traceLoading, setTraceLoading] = useState(false)
+  // Monotonic token for the in-flight trace fetch. Each open/close bumps it; a resolved
+  // fetch only applies its result when its token is still current, so a slow query for a
+  // previously clicked row can't overwrite the trace of the row now on screen.
+  const traceToken = useRef(0)
 
   // Drives both the trigger label (Base UI's `items`) and the dropdown options, so a
   // closed Select shows the localized label instead of the raw value (see issue #4).
@@ -104,6 +83,32 @@ export function LogsPanel(): React.JSX.Element {
     const next = value ?? ALL
     setOutcome(next)
     void runQuery({ outcome: next, model })
+  }
+
+  // Open the detail dialog for a row and fetch its raw capture (may resolve to null when
+  // capture wasn't recorded — the dialog shows a hint in that case).
+  const openTrace = (row: LogRow): void => {
+    const token = ++traceToken.current
+    setSelected(row)
+    setTrace(null)
+    setTraceLoading(true)
+    window.api.gateway
+      .queryTrace({ req_id: row.req_id, at: row.at })
+      .then((r) => {
+        if (token === traceToken.current) setTrace(r)
+      })
+      .catch(() => {
+        if (token === traceToken.current) setTrace(null)
+      })
+      .finally(() => {
+        if (token === traceToken.current) setTraceLoading(false)
+      })
+  }
+
+  // Bump the token so a still-in-flight fetch for the closed row is ignored when it lands.
+  const closeTrace = (): void => {
+    traceToken.current++
+    setSelected(null)
   }
 
   return (
@@ -163,19 +168,26 @@ export function LogsPanel(): React.JSX.Element {
               <TableHead>{t('logs.model')}</TableHead>
               <TableHead>{t('logs.channel')}</TableHead>
               <TableHead className="text-right">{t('logs.tokensIn')}</TableHead>
+              <TableHead className="text-right">{t('logs.cacheRead')}</TableHead>
+              <TableHead className="text-right">{t('logs.cacheWrite5m')}</TableHead>
+              <TableHead className="text-right">{t('logs.cacheWrite1h')}</TableHead>
               <TableHead className="text-right">{t('logs.tokensOut')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={10} className="h-24 text-center text-sm text-muted-foreground">
                   {loading ? t('common.loading') : t('logs.empty')}
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((r) => (
-                <TableRow key={r.req_id}>
+                <TableRow
+                  key={r.req_id}
+                  onClick={() => openTrace(r)}
+                  className="cursor-pointer hover:bg-muted/50"
+                >
                   <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                     {fmtTime(r.at)}
                   </TableCell>
@@ -193,6 +205,15 @@ export function LogsPanel(): React.JSX.Element {
                     {fmtNum(r.input_tokens)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
+                    {fmtNum(r.cache_read_tokens)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {fmtNum(r.cache_write_5m_tokens)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {fmtNum(r.cache_write_1h_tokens)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
                     {fmtNum(r.output_tokens)}
                   </TableCell>
                 </TableRow>
@@ -201,6 +222,8 @@ export function LogsPanel(): React.JSX.Element {
           </TableBody>
         </Table>
       </div>
+
+      <LogTraceDialog row={selected} trace={trace} loading={traceLoading} onClose={closeTrace} />
     </div>
   )
 }
