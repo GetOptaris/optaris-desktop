@@ -10,7 +10,8 @@ const gateway: GatewayApi = {
   getBaseUrl: () => ipcRenderer.invoke(GATEWAY_IPC.getBaseUrl),
   getConfig: () => ipcRenderer.invoke(GATEWAY_IPC.getConfig),
   updateConfig: (config: ConfigInput) => ipcRenderer.invoke(GATEWAY_IPC.updateConfig, config),
-  queryLogs: (params?: LogQuery) => ipcRenderer.invoke(GATEWAY_IPC.queryLogs, params)
+  queryLogs: (params?: LogQuery) => ipcRenderer.invoke(GATEWAY_IPC.queryLogs, params),
+  regenerateApiKey: () => ipcRenderer.invoke(GATEWAY_IPC.regenerateApiKey)
 }
 
 const api = { gateway }

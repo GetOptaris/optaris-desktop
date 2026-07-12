@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { randomBytes } from 'node:crypto'
 import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ConfigInput, DisplayConfig } from '../shared/gateway'
@@ -50,6 +51,13 @@ export interface GatewaySettings {
 export interface GatewayConfig {
   /** Group every request routes to until per-request auth lands (phase 3). */
   default_group_id?: string
+  /**
+   * The single client-facing key inbound requests must present (the gateway rejects
+   * mismatches with 401). Unlike a channel `api_key`, this is NOT an upstream secret:
+   * it is the local gateway's own admission key and the user must be able to see and
+   * copy it, so it is passed through to the renderer in full (see sanitizeConfig).
+   */
+  gateway_api_key?: string
   channels: GatewayChannel[]
   groups: GatewayGroup[]
   settings: GatewaySettings
@@ -58,9 +66,19 @@ export interface GatewayConfig {
 /** An empty but valid config: no channels/groups yet, all settings at defaults. */
 const DEFAULT_CONFIG: GatewayConfig = {
   default_group_id: '',
+  gateway_api_key: '',
   channels: [],
   groups: [],
   settings: {}
+}
+
+/**
+ * Generate a fresh client-facing gateway key. The `sk-optaris-` prefix keeps it
+ * recognizable (and accepted by clients that validate an `sk-` shape); the 24 random
+ * bytes give ~192 bits of entropy, base64url-encoded so it is copy/paste safe.
+ */
+export function generateGatewayApiKey(): string {
+  return `sk-optaris-${randomBytes(24).toString('base64url')}`
 }
 
 /** Path of the config JSON the gateway reads (--config). */
@@ -94,9 +112,42 @@ export async function ensureConfig(): Promise<string> {
   try {
     await access(path)
   } catch {
-    await writeConfig(DEFAULT_CONFIG)
+    // First run: seed with a freshly generated gateway key so the sidecar boots
+    // already protected.
+    await writeConfig({ ...DEFAULT_CONFIG, gateway_api_key: generateGatewayApiKey() })
   }
   return path
+}
+
+/**
+ * Guarantee the config carries a gateway API key, generating and persisting one if it
+ * is missing. This is the upgrade path for installs whose config predates the key (a
+ * fresh install already gets one from ensureConfig). Returns the effective key.
+ *
+ * Called at startup before the sidecar spawns. Safe from the readConfig→ensureConfig
+ * recursion: neither ensureConfig nor this function calls back into readConfig's
+ * caller — ensureConfig only seeds a missing file.
+ */
+export async function ensureGatewayApiKey(): Promise<string> {
+  const config = await readConfig()
+  if (config.gateway_api_key && config.gateway_api_key.length > 0) {
+    return config.gateway_api_key
+  }
+  const key = generateGatewayApiKey()
+  await writeConfig({ ...config, gateway_api_key: key })
+  return key
+}
+
+/**
+ * Replace the gateway API key with a freshly generated one and persist it. Backs the
+ * dashboard's "regenerate" button. The sidecar hot-reloads the new key via its mtime
+ * poller. Returns the new key. Existing clients must be updated to the new key.
+ */
+export async function regenerateGatewayApiKey(): Promise<string> {
+  const current = await readConfig()
+  const key = generateGatewayApiKey()
+  await writeConfig({ ...current, gateway_api_key: key })
+  return key
 }
 
 /** Ensure the gateway data directory exists. Returns its path. */
@@ -118,6 +169,7 @@ export async function readConfig(): Promise<GatewayConfig> {
   const parsed = JSON.parse(await readFile(path, 'utf8')) as Partial<GatewayConfig>
   return {
     default_group_id: parsed.default_group_id ?? '',
+    gateway_api_key: typeof parsed.gateway_api_key === 'string' ? parsed.gateway_api_key : '',
     channels: Array.isArray(parsed.channels) ? parsed.channels : [],
     groups: Array.isArray(parsed.groups) ? parsed.groups : [],
     settings: parsed.settings && typeof parsed.settings === 'object' ? parsed.settings : {}
@@ -149,6 +201,10 @@ export function maskApiKey(key: string): string {
 export function sanitizeConfig(config: GatewayConfig): DisplayConfig {
   return {
     default_group_id: config.default_group_id,
+    // Passed through in full (unlike channel keys): the gateway key is the local
+    // admission credential the user must see and copy into their clients, not an
+    // upstream secret. See GatewayConfig.gateway_api_key.
+    gateway_api_key: config.gateway_api_key ?? '',
     channels: config.channels.map((c) => ({
       id: c.id,
       name: c.name,
@@ -235,6 +291,9 @@ export function mergeConfig(current: GatewayConfig, input: ConfigInput): Gateway
   }))
   return {
     default_group_id: input.default_group_id ?? '',
+    // The renderer never sends the gateway key back, so always keep the stored one.
+    // It is changed only through regenerateGatewayApiKey, never a plain config save.
+    gateway_api_key: current.gateway_api_key ?? '',
     channels,
     groups,
     settings: input.settings ?? {}

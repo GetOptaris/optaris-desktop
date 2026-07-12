@@ -44,6 +44,12 @@ export interface GroupDraft {
 
 export interface ConfigDraft {
   default_group_id: string
+  /**
+   * The client-facing gateway key, shown to the user in the dashboard. Display-only:
+   * it is never part of buildInput, so a plain Save never touches it — only the
+   * regenerate action changes it (via a dedicated IPC).
+   */
+  gateway_api_key: string
   channels: ChannelDraft[]
   groups: GroupDraft[]
   settings: DisplaySettings
@@ -78,6 +84,7 @@ function groupToDraft(g: DisplayGroup): GroupDraft {
 function toDraft(config: DisplayConfig): ConfigDraft {
   return {
     default_group_id: config.default_group_id ?? '',
+    gateway_api_key: config.gateway_api_key ?? '',
     channels: config.channels.map(channelToDraft),
     groups: config.groups.map(groupToDraft),
     settings: { ...config.settings }

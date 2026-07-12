@@ -2,7 +2,14 @@ import { ipcMain } from 'electron'
 import { GATEWAY_IPC } from '../shared/gateway'
 import type { ConfigInput, DisplayConfig, LogQuery, LogRow } from '../shared/gateway'
 import type { GatewayManager } from './gateway'
-import { mergeConfig, readConfig, sanitizeConfig, validateConfigInput, writeConfig } from './config'
+import {
+  mergeConfig,
+  readConfig,
+  regenerateGatewayApiKey,
+  sanitizeConfig,
+  validateConfigInput,
+  writeConfig
+} from './config'
 import { queryLogs } from './logs'
 
 /**
@@ -37,4 +44,8 @@ export function registerGatewayIpc(gateway: GatewayManager): void {
   ipcMain.handle(GATEWAY_IPC.queryLogs, (_event, params: LogQuery = {}): LogRow[] => {
     return queryLogs(params)
   })
+
+  // Regenerate the single client-facing gateway API key and return the new value so the
+  // dashboard can show it. The sidecar hot-reloads it on its own via mtime polling.
+  ipcMain.handle(GATEWAY_IPC.regenerateApiKey, (): Promise<string> => regenerateGatewayApiKey())
 }
