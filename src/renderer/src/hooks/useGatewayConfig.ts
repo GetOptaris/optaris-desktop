@@ -137,6 +137,8 @@ export interface UseGatewayConfig {
   updateSettings: (patch: Partial<DisplaySettings>) => void
   addChannel: () => string
   updateChannel: (id: string, patch: Partial<ChannelDraft>) => void
+  /** Clone a channel (new id, no API key) right after the source. Returns the new id. */
+  duplicateChannel: (id: string, nameSuffix?: string) => string
   removeChannel: (id: string) => void
   addGroup: () => string
   updateGroup: (id: string, patch: Partial<GroupDraft>) => void
@@ -245,6 +247,35 @@ export function useGatewayConfig(): UseGatewayConfig {
     [edit]
   )
 
+  // Clone a channel so a new one can be built from an existing config without retyping
+  // models etc. The API key never reaches the renderer, so the copy starts key-less
+  // (has_api_key: false) and must have its key re-entered before saving.
+  const duplicateChannel = useCallback(
+    (id: string, nameSuffix = ''): string => {
+      const nid = newId('ch')
+      edit((d) => {
+        const idx = d.channels.findIndex((c) => c.id === id)
+        if (idx === -1) return d
+        const src = d.channels[idx]
+        const copy: ChannelDraft = {
+          id: nid,
+          name: `${src.name}${nameSuffix}`,
+          base_url: src.base_url,
+          has_api_key: false,
+          api_key_input: '',
+          models: [...src.models],
+          price_weight: src.price_weight,
+          enabled: src.enabled
+        }
+        const channels = [...d.channels]
+        channels.splice(idx + 1, 0, copy)
+        return { ...d, channels }
+      })
+      return nid
+    },
+    [edit]
+  )
+
   // Removing a channel also drops it from every group's channel_ids so no group is left
   // pointing at a dangling id.
   const removeChannel = useCallback(
@@ -301,6 +332,7 @@ export function useGatewayConfig(): UseGatewayConfig {
     updateSettings,
     addChannel,
     updateChannel,
+    duplicateChannel,
     removeChannel,
     addGroup,
     updateGroup,

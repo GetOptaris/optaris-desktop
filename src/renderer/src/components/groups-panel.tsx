@@ -4,6 +4,7 @@ import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/componen
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { useT, type TFunction } from '@/i18n'
 import type { ChannelDraft, GroupDraft } from '@/hooks/useGatewayConfig'
 
 interface GroupsPanelProps {
@@ -21,24 +22,23 @@ export function GroupsPanel({
   onUpdate,
   onRemove
 }: GroupsPanelProps): React.JSX.Element {
+  const t = useT()
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Named sets of channels a request can be routed across.
-        </p>
+        <p className="text-sm text-muted-foreground">{t('groups.description')}</p>
         <Button type="button" size="sm" onClick={onAdd}>
           <PlusIcon className="size-4" />
-          Add group
+          {t('groups.add')}
         </Button>
       </div>
 
       {groups.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-12 text-center">
-          <p className="text-sm text-muted-foreground">No groups yet.</p>
+          <p className="text-sm text-muted-foreground">{t('groups.empty')}</p>
           <Button type="button" variant="outline" size="sm" onClick={onAdd}>
             <PlusIcon className="size-4" />
-            Add your first group
+            {t('groups.addFirst')}
           </Button>
         </div>
       ) : (
@@ -49,6 +49,7 @@ export function GroupsPanel({
             channels={channels}
             onUpdate={onUpdate}
             onRemove={onRemove}
+            t={t}
           />
         ))
       )}
@@ -60,12 +61,14 @@ function GroupCard({
   group,
   channels,
   onUpdate,
-  onRemove
+  onRemove,
+  t
 }: {
   group: GroupDraft
   channels: ChannelDraft[]
   onUpdate: (id: string, patch: Partial<GroupDraft>) => void
   onRemove: (id: string) => void
+  t: TFunction
 }): React.JSX.Element {
   const { id } = group
 
@@ -79,7 +82,7 @@ function GroupCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="truncate">{group.name || '(unnamed group)'}</CardTitle>
+        <CardTitle className="truncate">{group.name || t('groups.unnamed')}</CardTitle>
         <CardAction>
           <Button
             type="button"
@@ -87,7 +90,8 @@ function GroupCard({
             size="icon"
             className="size-8 text-muted-foreground hover:text-destructive"
             onClick={() => onRemove(id)}
-            aria-label="Delete group"
+            aria-label={t('groups.delete')}
+            title={t('groups.delete')}
           >
             <Trash2Icon className="size-4" />
           </Button>
@@ -96,21 +100,19 @@ function GroupCard({
 
       <CardContent className="grid gap-4">
         <div className="grid gap-1.5">
-          <Label htmlFor={`${id}-name`}>Name</Label>
+          <Label htmlFor={`${id}-name`}>{t('groups.name')}</Label>
           <Input
             id={`${id}-name`}
             value={group.name}
             onChange={(e) => onUpdate(id, { name: e.target.value })}
-            placeholder="e.g. default"
+            placeholder={t('groups.namePlaceholder')}
           />
         </div>
 
         <div className="grid gap-2">
-          <Label>Channels</Label>
+          <Label>{t('groups.channels')}</Label>
           {channels.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              No channels to add yet — create a channel first.
-            </p>
+            <p className="text-xs text-muted-foreground">{t('groups.noChannels')}</p>
           ) : (
             <div className="grid gap-1 rounded-md border p-2 sm:grid-cols-2">
               {channels.map((c) => {
@@ -126,7 +128,7 @@ function GroupCard({
                       checked={group.channel_ids.includes(c.id)}
                       onCheckedChange={(checked) => toggleChannel(c.id, checked === true)}
                     />
-                    <span className="truncate">{c.name || '(unnamed channel)'}</span>
+                    <span className="truncate">{c.name || t('channels.unnamed')}</span>
                   </label>
                 )
               })}

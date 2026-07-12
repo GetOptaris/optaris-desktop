@@ -1,40 +1,50 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { LayersIcon, ScrollTextIcon, ServerIcon, SettingsIcon } from 'lucide-react'
+import {
+  LayoutDashboardIcon,
+  LayersIcon,
+  ScrollTextIcon,
+  ServerIcon,
+  SettingsIcon
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { BaseUrlCard } from '@/components/base-url-card'
+import { DashboardPanel } from '@/components/dashboard-panel'
 import { ChannelsPanel } from '@/components/channels-panel'
 import { GroupsPanel } from '@/components/groups-panel'
 import { SettingsPanel } from '@/components/settings-panel'
 import { LogsPanel } from '@/components/logs-panel'
 import { useGatewayConfig } from '@/hooks/useGatewayConfig'
+import { useT } from '@/i18n'
 
-type Tab = 'channels' | 'groups' | 'logs' | 'settings'
+type Tab = 'dashboard' | 'channels' | 'groups' | 'logs' | 'settings'
 
-const NAV: { id: Tab; label: string; icon: LucideIcon }[] = [
-  { id: 'channels', label: 'Channels', icon: ServerIcon },
-  { id: 'groups', label: 'Groups', icon: LayersIcon },
-  { id: 'logs', label: 'Logs', icon: ScrollTextIcon },
-  { id: 'settings', label: 'Settings', icon: SettingsIcon }
+const NAV: { id: Tab; labelKey: string; icon: LucideIcon }[] = [
+  { id: 'dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboardIcon },
+  { id: 'channels', labelKey: 'nav.channels', icon: ServerIcon },
+  { id: 'groups', labelKey: 'nav.groups', icon: LayersIcon },
+  { id: 'logs', labelKey: 'nav.logs', icon: ScrollTextIcon },
+  { id: 'settings', labelKey: 'nav.settings', icon: SettingsIcon }
 ]
 
 function App(): React.JSX.Element {
-  const [tab, setTab] = useState<Tab>('channels')
+  const t = useT()
+  const [tab, setTab] = useState<Tab>('dashboard')
   const config = useGatewayConfig()
   const { draft } = config
 
-  const isConfigTab = tab !== 'logs'
-  const activeLabel = NAV.find((n) => n.id === tab)?.label ?? ''
+  const isConfigTab = tab === 'channels' || tab === 'groups' || tab === 'settings'
+  const needsDraft = tab !== 'logs'
+  const activeLabelKey = NAV.find((n) => n.id === tab)?.labelKey ?? ''
 
   const onSave = async (): Promise<void> => {
     const error = await config.save()
     if (error) {
-      toast.error('Save failed', { description: error })
+      toast.error(t('toast.saveFailed'), { description: error })
     } else {
-      toast.success('Configuration saved')
+      toast.success(t('toast.saveSuccess'))
     }
   }
 
@@ -63,24 +73,21 @@ function App(): React.JSX.Element {
                 )}
               >
                 <Icon className="size-4" />
-                {item.label}
+                {t(item.labelKey)}
               </button>
             )
           })}
         </nav>
-        <div className="mt-auto p-3">
-          <BaseUrlCard />
-        </div>
       </aside>
 
       {/* Content */}
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between border-b px-6">
-          <h1 className="text-base font-semibold">{activeLabel}</h1>
+          <h1 className="text-base font-semibold">{t(activeLabelKey)}</h1>
           {isConfigTab ? (
             <div className="flex items-center gap-3">
               {config.dirty ? (
-                <span className="text-xs text-muted-foreground">Unsaved changes</span>
+                <span className="text-xs text-muted-foreground">{t('common.unsavedChanges')}</span>
               ) : null}
               <Button
                 type="button"
@@ -89,7 +96,7 @@ function App(): React.JSX.Element {
                 onClick={() => void config.reload()}
                 disabled={!config.dirty || config.saving || config.loading}
               >
-                Reset
+                {t('common.reset')}
               </Button>
               <Button
                 type="button"
@@ -97,17 +104,21 @@ function App(): React.JSX.Element {
                 onClick={onSave}
                 disabled={!config.dirty || config.saving || config.loading}
               >
-                {config.saving ? 'Saving…' : 'Save'}
+                {config.saving ? t('common.saving') : t('common.save')}
               </Button>
             </div>
           ) : null}
         </header>
 
         <div className="min-h-0 flex-1 overflow-auto p-6">
-          {isConfigTab && !draft ? (
+          {needsDraft && !draft ? (
             <p className="text-sm text-muted-foreground">
-              {config.error ? config.error : 'Loading…'}
+              {config.error ? config.error : t('common.loading')}
             </p>
+          ) : null}
+
+          {tab === 'dashboard' && draft ? (
+            <DashboardPanel draft={draft} onNavigate={setTab} />
           ) : null}
 
           {tab === 'channels' && draft ? (
@@ -115,6 +126,7 @@ function App(): React.JSX.Element {
               channels={draft.channels}
               onAdd={config.addChannel}
               onUpdate={config.updateChannel}
+              onDuplicate={(id) => config.duplicateChannel(id, t('channels.copySuffix'))}
               onRemove={config.removeChannel}
             />
           ) : null}
