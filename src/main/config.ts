@@ -125,10 +125,26 @@ export async function readConfig(): Promise<GatewayConfig> {
 }
 
 /**
- * Strip every plaintext api_key from a config, replacing it with a has_api_key flag —
- * the only shape allowed to reach the renderer. Fields are copied explicitly (an
- * allow-list) rather than by omit-destructuring so a future field can never leak a
- * secret by accident.
+ * Mask a plaintext key down to a recognizable preview — first 4 + `****` + last 4, e.g.
+ * `sk-1234****cdef`. Keys short enough that revealing both ends would expose (almost) the
+ * whole secret are masked more aggressively: only the first two chars are shown. Returns
+ * '' for an empty key. This preview is the *only* derivative of the key allowed to reach
+ * the renderer.
+ */
+export function maskApiKey(key: string): string {
+  if (typeof key !== 'string' || key.length === 0) return ''
+  if (key.length <= 8) {
+    const head = key.slice(0, 2)
+    return head + '*'.repeat(Math.max(2, key.length - head.length))
+  }
+  return `${key.slice(0, 4)}****${key.slice(-4)}`
+}
+
+/**
+ * Strip every plaintext api_key from a config, replacing it with a has_api_key flag and a
+ * masked api_key_preview — the only shape allowed to reach the renderer. Fields are copied
+ * explicitly (an allow-list) rather than by omit-destructuring so a future field can never
+ * leak a secret by accident.
  */
 export function sanitizeConfig(config: GatewayConfig): DisplayConfig {
   return {
@@ -138,6 +154,7 @@ export function sanitizeConfig(config: GatewayConfig): DisplayConfig {
       name: c.name,
       base_url: c.base_url,
       has_api_key: typeof c.api_key === 'string' && c.api_key.length > 0,
+      api_key_preview: typeof c.api_key === 'string' ? maskApiKey(c.api_key) : '',
       models: c.models,
       price_weight: c.price_weight,
       enabled: c.enabled,

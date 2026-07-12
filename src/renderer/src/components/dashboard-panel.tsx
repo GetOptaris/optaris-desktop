@@ -127,6 +127,11 @@ function GatewayCard({ t }: { t: (key: string) => string }): React.JSX.Element {
             {copied ? <CheckIcon className="size-4" /> : <CopyIcon className="size-4" />}
           </Button>
         </div>
+
+        <div className="mt-4 text-xs font-medium text-muted-foreground">
+          {t('dashboard.apiKeyLabel')}
+        </div>
+        <p className="mt-1.5 text-sm text-muted-foreground">{t('dashboard.apiKeyNote')}</p>
       </CardContent>
     </Card>
   )

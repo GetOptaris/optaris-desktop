@@ -80,7 +80,7 @@ function ChannelCard({
   const { id } = channel
 
   return (
-    <Card>
+    <Card id={`channel-${id}`}>
       <CardHeader>
         <CardTitle className="truncate">{channel.name || t('channels.unnamed')}</CardTitle>
         <CardAction className="flex items-center gap-3">
@@ -140,7 +140,11 @@ function ChannelCard({
         <Field
           label={t('channels.apiKey')}
           htmlFor={`${id}-api-key`}
-          hint={channel.has_api_key ? t('channels.apiKeyStoredHint') : undefined}
+          hint={
+            channel.has_api_key
+              ? t('channels.apiKeyStoredHint', { preview: channel.api_key_preview ?? '' })
+              : undefined
+          }
         >
           <Input
             id={`${id}-api-key`}

@@ -22,6 +22,13 @@ export interface DisplayChannel {
   base_url: string
   /** True when a non-empty api_key is stored for this channel (the key itself is never sent). */
   has_api_key: boolean
+  /**
+   * Masked preview of the stored key (e.g. `sk-1234****cdef`) so the user can tell
+   * *which* key is saved without the plaintext ever leaving the main process. Undefined
+   * when no key is stored. Display-only: it is never part of ChannelInput and never
+   * round-trips back on save.
+   */
+  api_key_preview?: string
   models: string[]
   price_weight?: number
   enabled: boolean
