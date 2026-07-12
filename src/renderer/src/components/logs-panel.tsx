@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCwIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -40,6 +40,10 @@ export function LogsPanel(): React.JSX.Element {
   const [selected, setSelected] = useState<LogRow | null>(null)
   const [trace, setTrace] = useState<TraceRecord | null>(null)
   const [traceLoading, setTraceLoading] = useState(false)
+  // Monotonic token for the in-flight trace fetch. Each open/close bumps it; a resolved
+  // fetch only applies its result when its token is still current, so a slow query for a
+  // previously clicked row can't overwrite the trace of the row now on screen.
+  const traceToken = useRef(0)
 
   // Drives both the trigger label (Base UI's `items`) and the dropdown options, so a
   // closed Select shows the localized label instead of the raw value (see issue #4).
@@ -84,17 +88,28 @@ export function LogsPanel(): React.JSX.Element {
   // Open the detail dialog for a row and fetch its raw capture (may resolve to null when
   // capture wasn't recorded — the dialog shows a hint in that case).
   const openTrace = (row: LogRow): void => {
+    const token = ++traceToken.current
     setSelected(row)
     setTrace(null)
     setTraceLoading(true)
     window.api.gateway
       .queryTrace({ req_id: row.req_id, at: row.at })
-      .then((r) => setTrace(r))
-      .catch(() => setTrace(null))
-      .finally(() => setTraceLoading(false))
+      .then((r) => {
+        if (token === traceToken.current) setTrace(r)
+      })
+      .catch(() => {
+        if (token === traceToken.current) setTrace(null)
+      })
+      .finally(() => {
+        if (token === traceToken.current) setTraceLoading(false)
+      })
   }
 
-  const closeTrace = (): void => setSelected(null)
+  // Bump the token so a still-in-flight fetch for the closed row is ignored when it lands.
+  const closeTrace = (): void => {
+    traceToken.current++
+    setSelected(null)
+  }
 
   return (
     <div className="flex min-h-0 flex-col gap-4">
