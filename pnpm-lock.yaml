@@ -8,52 +8,19 @@ importers:
 
   .:
     dependencies:
-      '@base-ui/react':
-        specifier: ^1.6.0
-        version: 1.6.0(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@electron-toolkit/preload':
         specifier: ^3.0.2
         version: 3.0.2(electron@39.8.10)
       '@electron-toolkit/utils':
         specifier: ^4.0.0
         version: 4.0.0(electron@39.8.10)
-      '@fontsource-variable/inter':
-        specifier: ^5.2.8
-        version: 5.2.8
-      '@tailwindcss/vite':
-        specifier: ^4.3.2
-        version: 4.3.2(vite@7.3.6(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0))
-      class-variance-authority:
-        specifier: ^0.7.1
-        version: 0.7.1
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
       electron-updater:
         specifier: ^6.3.9
         version: 6.8.9
-      lucide-react:
-        specifier: ^1.24.0
-        version: 1.24.0(react@19.2.7)
-      next-themes:
-        specifier: ^0.4.6
-        version: 0.4.6(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      shadcn:
-        specifier: ^4.13.0
-        version: 4.13.0(typescript@5.9.3)
-      sonner:
-        specifier: ^2.0.7
-        version: 2.0.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      tailwind-merge:
-        specifier: ^3.6.0
-        version: 3.6.0
-      tailwindcss:
-        specifier: ^4.3.2
-        version: 4.3.2
-      tw-animate-css:
-        specifier: ^1.4.0
-        version: 1.4.0
     devDependencies:
+      '@base-ui/react':
+        specifier: ^1.6.0
+        version: 1.6.0(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@electron-toolkit/eslint-config-prettier':
         specifier: ^3.0.0
         version: 3.0.0(eslint@9.39.4(jiti@2.7.0))(prettier@3.9.5)
@@ -63,6 +30,12 @@ importers:
       '@electron-toolkit/tsconfig':
         specifier: ^2.0.0
         version: 2.0.0(@types/node@22.20.1)
+      '@fontsource-variable/inter':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@tailwindcss/vite':
+        specifier: ^4.3.2
+        version: 4.3.2(vite@7.3.6(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0))
       '@types/node':
         specifier: ^22.19.1
         version: 22.20.1
@@ -75,6 +48,12 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^5.1.1
         version: 5.2.0(vite@7.3.6(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0))
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
       electron:
         specifier: ^39.2.6
         version: 39.8.10
@@ -96,6 +75,12 @@ importers:
       eslint-plugin-react-refresh:
         specifier: ^0.4.24
         version: 0.4.26(eslint@9.39.4(jiti@2.7.0))
+      lucide-react:
+        specifier: ^1.24.0
+        version: 1.24.0(react@19.2.7)
+      next-themes:
+        specifier: ^0.4.6
+        version: 0.4.6(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       prettier:
         specifier: ^3.7.4
         version: 3.9.5
@@ -105,6 +90,21 @@ importers:
       react-dom:
         specifier: ^19.2.1
         version: 19.2.7(react@19.2.7)
+      shadcn:
+        specifier: ^4.13.0
+        version: 4.13.0(typescript@5.9.3)
+      sonner:
+        specifier: ^2.0.7
+        version: 2.0.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      tailwind-merge:
+        specifier: ^3.6.0
+        version: 3.6.0
+      tailwindcss:
+        specifier: ^4.3.2
+        version: 4.3.2
+      tw-animate-css:
+        specifier: ^1.4.0
+        version: 1.4.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

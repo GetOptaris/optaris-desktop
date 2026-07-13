@@ -12,6 +12,12 @@ files:
   # The gateway sidecar ships via extraResources (below), not inside the asar.
   # Excluding it here keeps the ~10-20MB binary from being packed twice.
   - '!resources/bin/**'
+  # Repo-only files not needed at runtime — docs, tooling config, and the Go
+  # sidecar *source* (only its compiled binary ships, via extraResources below).
+  - '!gateway'
+  - '!scripts'
+  - '!.claude'
+  - '!{CLAUDE.md,README.zh-CN.md,components.json,pnpm-workspace.yaml}'
 asarUnpack:
   - resources/**
 # Ship the compiled gateway sidecar outside the asar, into <resources>/bin. This
@@ -50,13 +56,9 @@ linux:
     - AppImage
     - snap
     - deb
-  maintainer: GetOptaris <support@getoptaris.com>
-  description: Local LLM gateway desktop app — route OpenAI/Claude/Gemini traffic across your upstream providers.
+  # maintainer/description default to package.json author/description.
   category: Utility
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
-publish:
-  provider: github
-  owner: GetOptaris
-  repo: optaris-desktop
+# publish (github provider) is derived from package.json "repository".
