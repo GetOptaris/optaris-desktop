@@ -153,20 +153,16 @@ function App(): React.JSX.Element {
             <GroupsPanel
               groups={draft.groups}
               channels={draft.channels}
+              defaultGroupId={draft.default_group_id}
               onAdd={config.addGroup}
               onUpdate={config.updateGroup}
               onRemove={config.removeGroup}
+              onSetDefaultGroup={config.setDefaultGroupId}
             />
           ) : null}
 
           {tab === 'settings' && draft ? (
-            <SettingsPanel
-              defaultGroupId={draft.default_group_id}
-              groups={draft.groups}
-              settings={draft.settings}
-              onSetDefaultGroup={config.setDefaultGroupId}
-              onUpdateSettings={config.updateSettings}
-            />
+            <SettingsPanel settings={draft.settings} onUpdateSettings={config.updateSettings} />
           ) : null}
 
           {tab === 'logs' ? <LogsPanel /> : null}

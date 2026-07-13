@@ -12,78 +12,32 @@ import {
 } from '@/components/ui/select'
 import { useLocale, useT } from '@/i18n'
 import type { LangPreference } from '@/i18n'
-import type { GroupDraft } from '@/hooks/useGatewayConfig'
 import type { DisplaySettings } from '../../../shared/gateway'
 
-/** Sentinel for the "no default group" option (Select values must be non-empty). */
-const NO_GROUP = '__none__'
-
 interface SettingsPanelProps {
-  defaultGroupId: string
-  groups: GroupDraft[]
   settings: DisplaySettings
-  onSetDefaultGroup: (id: string) => void
   onUpdateSettings: (patch: Partial<DisplaySettings>) => void
 }
 
 export function SettingsPanel({
-  defaultGroupId,
-  groups,
   settings,
-  onSetDefaultGroup,
   onUpdateSettings
 }: SettingsPanelProps): React.JSX.Element {
   const t = useT()
   const captureEnabled = settings.capture_enabled === true
   const captureMode = settings.capture_mode ?? null
 
-  // value→label maps drive both the trigger (Base UI's `items`) and the dropdown
+  // value→label map drives both the trigger (Base UI's `items`) and the dropdown
   // options, keeping them from drifting. Without `items`, a closed Select renders
   // the raw value because its portalled items are unmounted (see issue #4).
   const captureItems = useMemo<Record<string, React.ReactNode>>(
     () => ({ failed_only: t('settings.captureFailedOnly'), all: t('settings.captureAll') }),
     [t]
   )
-  const groupItems = useMemo<Record<string, React.ReactNode>>(
-    () => ({
-      [NO_GROUP]: t('common.none'),
-      ...Object.fromEntries(groups.map((g) => [g.id, g.name || t('groups.unnamed')]))
-    }),
-    [groups, t]
-  )
 
   return (
     <div className="flex flex-col gap-4">
       <AppearanceCard />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('settings.routingTitle')}</CardTitle>
-          <CardDescription>{t('settings.routingDescription')}</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-1.5">
-          <Label htmlFor="default-group">{t('settings.defaultGroup')}</Label>
-          <Select
-            value={defaultGroupId || NO_GROUP}
-            onValueChange={(value) => onSetDefaultGroup(value && value !== NO_GROUP ? value : '')}
-            items={groupItems}
-          >
-            <SelectTrigger id="default-group" className="w-full sm:w-72">
-              <SelectValue placeholder={t('settings.defaultGroupPlaceholder')} />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(groupItems).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {groups.length === 0 ? (
-            <p className="text-xs text-muted-foreground">{t('settings.createGroupFirst')}</p>
-          ) : null}
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>

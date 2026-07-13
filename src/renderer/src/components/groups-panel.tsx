@@ -1,28 +1,61 @@
+import { useMemo } from 'react'
 import { PlusIcon, Trash2Icon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import { useT, type TFunction } from '@/i18n'
 import type { ChannelDraft, GroupDraft } from '@/hooks/useGatewayConfig'
+
+/** Sentinel for the "no active group" option (Select values must be non-empty). */
+const NO_GROUP = '__none__'
 
 interface GroupsPanelProps {
   groups: GroupDraft[]
   channels: ChannelDraft[]
+  defaultGroupId: string
   onAdd: () => void
   onUpdate: (id: string, patch: Partial<GroupDraft>) => void
   onRemove: (id: string) => void
+  onSetDefaultGroup: (id: string) => void
 }
 
 export function GroupsPanel({
   groups,
   channels,
+  defaultGroupId,
   onAdd,
   onUpdate,
-  onRemove
+  onRemove,
+  onSetDefaultGroup
 }: GroupsPanelProps): React.JSX.Element {
   const t = useT()
+
+  // value→label map drives both the trigger (Base UI's `items`) and the options,
+  // keeping them from drifting — mirrors the capture-mode select in settings-panel.
+  const groupItems = useMemo<Record<string, React.ReactNode>>(
+    () => ({
+      [NO_GROUP]: t('common.none'),
+      ...Object.fromEntries(groups.map((g) => [g.id, g.name || t('groups.unnamed')]))
+    }),
+    [groups, t]
+  )
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -32,6 +65,34 @@ export function GroupsPanel({
           {t('groups.add')}
         </Button>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('groups.activeTitle')}</CardTitle>
+          <CardDescription>{t('groups.activeDescription')}</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-1.5">
+          <Select
+            value={defaultGroupId || NO_GROUP}
+            onValueChange={(value) => onSetDefaultGroup(value && value !== NO_GROUP ? value : '')}
+            items={groupItems}
+          >
+            <SelectTrigger className="w-full sm:w-72">
+              <SelectValue placeholder={t('groups.activePlaceholder')} />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(groupItems).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {groups.length === 0 ? (
+            <p className="text-xs text-muted-foreground">{t('groups.activeEmpty')}</p>
+          ) : null}
+        </CardContent>
+      </Card>
 
       {groups.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-12 text-center">

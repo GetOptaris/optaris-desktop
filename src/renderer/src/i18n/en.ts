@@ -29,14 +29,11 @@ const en = {
     apiKeyRegenerateFailed: 'Failed to generate a new API key'
   },
   dashboard: {
-    subtitle: 'Overview of your local gateway and how to get started.',
     gatewayTitle: 'Gateway',
     gatewayDescription: 'Point your client’s base URL at this address.',
     baseUrl: 'Base URL',
     starting: 'starting…',
     apiKeyLabel: 'API Key',
-    apiKeyNote:
-      'Clients must send this key on every request (Authorization: Bearer, x-api-key, or x-goog-api-key). Requests without it are rejected.',
     apiKeyReveal: 'Reveal API key',
     apiKeyHide: 'Hide API key',
     apiKeyRegenerate: 'Regenerate',
@@ -46,20 +43,20 @@ const en = {
     overviewTitle: 'Overview',
     channelsCount: 'Channels',
     groupsCount: 'Groups',
-    defaultGroup: 'Default group',
+    defaultGroup: 'Active group',
     quickStartTitle: 'Quick start',
-    quickStartDescription: 'Set up routing in a few steps.',
     step1Title: 'Add a channel',
     step1Desc: 'Register an upstream provider with its base URL, API key and models.',
     step2Title: 'Create a group',
-    step2Desc: 'Bundle one or more channels into a routing group.',
-    step3Title: 'Pick a default group',
-    step3Desc: 'Choose which group every request routes through by default.',
-    step4Title: 'Point your client',
-    step4Desc: 'Set your client’s base URL to the gateway address above.',
+    step2Desc: 'Bundle one or more channels into a group, and pick one as the active group.',
+    step3Title: 'Point your client',
+    step3Desc: 'Set your client’s base URL to the gateway address above.',
+    step4Title: 'View logs',
+    step4Desc:
+      'Inspect request records on the Logs page; enable request/response capture in Settings.',
     goChannels: 'Go to Channels',
     goGroups: 'Go to Groups',
-    goSettings: 'Go to Settings'
+    goLogs: 'Go to Logs'
   },
   channels: {
     description: 'Upstream providers the gateway can route to.',
@@ -92,6 +89,10 @@ const en = {
   },
   groups: {
     description: 'Named sets of channels a request can be routed across.',
+    activeTitle: 'Active group',
+    activeDescription: 'Every request is routed to this group.',
+    activePlaceholder: 'Select a group',
+    activeEmpty: 'Create a group first to activate one.',
     add: 'Add group',
     addFirst: 'Add your first group',
     empty: 'No groups yet.',
@@ -103,11 +104,6 @@ const en = {
     noChannels: 'No channels to add yet — create a channel first.'
   },
   settings: {
-    routingTitle: 'Routing',
-    routingDescription: 'The group every request is routed through by default.',
-    defaultGroup: 'Default group',
-    defaultGroupPlaceholder: 'Select a group',
-    createGroupFirst: 'Create a group to set a default.',
     captureTitle: 'Request capture',
     captureDescription: 'Persist raw request/response payloads for inspection.',
     captureEnable: 'Enable capture',

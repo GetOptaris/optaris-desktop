@@ -27,14 +27,11 @@ const zh: Dict = {
     apiKeyRegenerateFailed: '生成新 API Key 失败'
   },
   dashboard: {
-    subtitle: '本地网关概况与上手指引。',
     gatewayTitle: '网关',
     gatewayDescription: '把客户端的 base URL 指向此地址。',
     baseUrl: '网关地址',
     starting: '启动中…',
     apiKeyLabel: 'API Key',
-    apiKeyNote:
-      '客户端每次请求都必须携带此 Key（Authorization: Bearer、x-api-key 或 x-goog-api-key）。未携带的请求会被拒绝。',
     apiKeyReveal: '显示 API Key',
     apiKeyHide: '隐藏 API Key',
     apiKeyRegenerate: '重新生成',
@@ -43,20 +40,19 @@ const zh: Dict = {
     overviewTitle: '概览',
     channelsCount: '渠道',
     groupsCount: '分组',
-    defaultGroup: '默认分组',
+    defaultGroup: '激活分组',
     quickStartTitle: '快速上手',
-    quickStartDescription: '几步完成路由配置。',
     step1Title: '添加渠道',
     step1Desc: '登记一个上游供应商，填写 base URL、API Key 和模型。',
     step2Title: '创建分组',
-    step2Desc: '把一个或多个渠道组成一个路由分组。',
-    step3Title: '选择默认分组',
-    step3Desc: '指定所有请求默认经过哪个分组。',
-    step4Title: '指向客户端',
-    step4Desc: '把客户端的 base URL 设为上方的网关地址。',
+    step2Desc: '把一个或多个渠道组成一个分组，并选择其中一个作为激活分组。',
+    step3Title: '指向客户端',
+    step3Desc: '把客户端的 base URL 设为上方的网关地址。',
+    step4Title: '查看日志',
+    step4Desc: '在日志页查看请求记录；可在「设置」中开启抓取请求与响应正文。',
     goChannels: '前往渠道',
     goGroups: '前往分组',
-    goSettings: '前往设置'
+    goLogs: '前往日志'
   },
   channels: {
     description: '网关可路由到的上游供应商。',
@@ -89,6 +85,10 @@ const zh: Dict = {
   },
   groups: {
     description: '一组具名的渠道，请求可在其中路由。',
+    activeTitle: '激活分组',
+    activeDescription: '所有请求都会路由到这个分组。',
+    activePlaceholder: '选择一个分组',
+    activeEmpty: '先创建分组，才能选择激活分组。',
     add: '添加分组',
     addFirst: '添加第一个分组',
     empty: '还没有分组。',
@@ -100,11 +100,6 @@ const zh: Dict = {
     noChannels: '还没有可添加的渠道 — 请先创建渠道。'
   },
   settings: {
-    routingTitle: '路由',
-    routingDescription: '所有请求默认经过的分组。',
-    defaultGroup: '默认分组',
-    defaultGroupPlaceholder: '选择一个分组',
-    createGroupFirst: '先创建分组才能设为默认。',
     captureTitle: '请求抓取',
     captureDescription: '持久化原始请求/响应内容以供排查。',
     captureEnable: '启用抓取',
