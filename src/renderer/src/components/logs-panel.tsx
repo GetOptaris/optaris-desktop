@@ -19,10 +19,17 @@ import {
   TableRow
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
-import { fmtNum, fmtTime, outcomeBadgeClass, outcomeLabel } from '@/lib/log-format'
+import {
+  clientLabel,
+  fmtNum,
+  fmtTime,
+  outcomeBadgeClass,
+  outcomeLabel,
+  streamLabel
+} from '@/lib/log-format'
 import { useT } from '@/i18n'
 import { LogTraceDialog } from './log-trace-dialog'
-import type { LogQuery, LogRow, TraceRecord } from '../../../shared/gateway'
+import type { DisplayGroup, LogQuery, LogRow, TraceRecord } from '../../../shared/gateway'
 
 const ALL = '__all__'
 const OUTCOMES = ['success', 'failed', 'client_canceled', 'rejected'] as const
@@ -36,6 +43,9 @@ export function LogsPanel(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [outcome, setOutcome] = useState<string>(ALL)
   const [model, setModel] = useState('')
+  // Group id -> name, loaded once from config so the table/detail render a readable group name
+  // instead of the raw grp_… id.
+  const [groups, setGroups] = useState<DisplayGroup[]>([])
   // Row whose trace is being viewed (drives the detail dialog), plus its loaded capture.
   const [selected, setSelected] = useState<LogRow | null>(null)
   const [trace, setTrace] = useState<TraceRecord | null>(null)
@@ -54,6 +64,12 @@ export function LogsPanel(): React.JSX.Element {
     }),
     [t]
   )
+
+  // Resolve a group id to its display name; falls back to the raw id when unknown, '—' when absent.
+  const groupNameOf = useMemo(() => {
+    const byId = new Map(groups.map((g) => [g.id, g.name]))
+    return (id: string | null): string => (id ? (byId.get(id) ?? id) : '—')
+  }, [groups])
 
   const runQuery = useCallback(async (filters: { outcome: string; model: string }) => {
     setLoading(true)
@@ -76,6 +92,14 @@ export function LogsPanel(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void runQuery({ outcome: ALL, model: '' })
   }, [runQuery])
+
+  // Load group names once so group_id renders as a name (config is an external system).
+  useEffect(() => {
+    window.api.gateway
+      .getConfig()
+      .then((c) => setGroups(c.groups))
+      .catch(() => setGroups([]))
+  }, [])
 
   const refresh = (): void => void runQuery({ outcome, model })
 
@@ -167,6 +191,11 @@ export function LogsPanel(): React.JSX.Element {
               <TableHead className="text-right">{t('logs.status')}</TableHead>
               <TableHead>{t('logs.model')}</TableHead>
               <TableHead>{t('logs.channel')}</TableHead>
+              <TableHead>{t('logs.clientType')}</TableHead>
+              <TableHead>{t('logs.group')}</TableHead>
+              <TableHead>{t('logs.stream')}</TableHead>
+              <TableHead>{t('logs.sessionId')}</TableHead>
+              <TableHead className="text-right">{t('logs.upstreamsTried')}</TableHead>
               <TableHead className="text-right">{t('logs.tokensIn')}</TableHead>
               <TableHead className="text-right">{t('logs.cacheRead')}</TableHead>
               <TableHead className="text-right">{t('logs.cacheWrite5m')}</TableHead>
@@ -177,7 +206,7 @@ export function LogsPanel(): React.JSX.Element {
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="h-24 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={15} className="h-24 text-center text-sm text-muted-foreground">
                   {loading ? t('common.loading') : t('logs.empty')}
                 </TableCell>
               </TableRow>
@@ -201,6 +230,15 @@ export function LogsPanel(): React.JSX.Element {
                     {r.model ?? '—'}
                   </TableCell>
                   <TableCell className="max-w-40 truncate">{r.channel_name ?? '—'}</TableCell>
+                  <TableCell>{clientLabel(t, r.client_type)}</TableCell>
+                  <TableCell className="max-w-32 truncate">{groupNameOf(r.group_id)}</TableCell>
+                  <TableCell>{streamLabel(t, r.stream)}</TableCell>
+                  <TableCell className="max-w-40 truncate font-mono text-xs">
+                    {r.session_id ?? '—'}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {fmtNum(r.upstreams_tried)}
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {fmtNum(r.input_tokens)}
                   </TableCell>
@@ -223,7 +261,13 @@ export function LogsPanel(): React.JSX.Element {
         </Table>
       </div>
 
-      <LogTraceDialog row={selected} trace={trace} loading={traceLoading} onClose={closeTrace} />
+      <LogTraceDialog
+        row={selected}
+        trace={trace}
+        loading={traceLoading}
+        groupNameOf={groupNameOf}
+        onClose={closeTrace}
+      />
     </div>
   )
 }

@@ -149,14 +149,64 @@ CREATE TABLE IF NOT EXISTS requests (
     cache_write_5m_tokens INTEGER,
     cache_write_1h_tokens INTEGER,
     output_tokens         INTEGER,
-    reasoning_tokens      INTEGER
+    reasoning_tokens      INTEGER,
+    client_type           TEXT,    -- claude_code / claude_desktop / codex / "" (unknown)
+    session_id            TEXT,
+    upstreams_tried       INTEGER  -- distinct upstream channels attempted
 );`
 
 func initSchema(db *sql.DB) error {
 	if _, err := db.Exec(createRequestsTable); err != nil {
 		return fmt.Errorf("create schema: %w", err)
 	}
+	return migrateRequests(db)
+}
+
+// migrateRequests adds columns introduced after the initial schema to a pre-existing database:
+// createRequestsTable uses CREATE TABLE IF NOT EXISTS, which never alters an already-created table,
+// so upgraded installs need an explicit ALTER TABLE for each newer column. Existing rows get NULL
+// for the new columns; new requests populate them normally.
+func migrateRequests(db *sql.DB) error {
+	have, err := existingColumns(db, "requests")
+	if err != nil {
+		return fmt.Errorf("inspect requests schema: %w", err)
+	}
+	// Columns added after the original schema, in the order they were introduced.
+	for _, c := range []struct{ name, ddl string }{
+		{"client_type", "TEXT"},
+		{"session_id", "TEXT"},
+		{"upstreams_tried", "INTEGER"},
+	} {
+		if _, ok := have[c.name]; ok {
+			continue
+		}
+		if _, err := db.Exec("ALTER TABLE requests ADD COLUMN " + c.name + " " + c.ddl); err != nil {
+			return fmt.Errorf("add column %s: %w", c.name, err)
+		}
+	}
 	return nil
+}
+
+// existingColumns returns the set of column names on a table via PRAGMA table_info.
+func existingColumns(db *sql.DB, table string) (map[string]struct{}, error) {
+	rows, err := db.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	cols := map[string]struct{}{}
+	for rows.Next() {
+		var (
+			cid, notnull, pk int
+			name, ctype      string
+			dflt             any
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return nil, err
+		}
+		cols[name] = struct{}{}
+	}
+	return cols, rows.Err()
 }
 
 // enqueue is the OnEvent callback body. It runs synchronously in the request
@@ -232,8 +282,9 @@ INSERT OR IGNORE INTO requests (
     channel_id, channel_name, outcome, http_status, fail_class,
     first_token_ms,
     input_tokens, cache_read_tokens, cache_write_5m_tokens, cache_write_1h_tokens,
-    output_tokens, reasoning_tokens
-) VALUES (?,?,?,?,?, ?,?,?,?,?, ?, ?,?,?,?, ?,?);`
+    output_tokens, reasoning_tokens,
+    client_type, session_id, upstreams_tried
+) VALUES (?,?,?,?,?, ?,?,?,?,?, ?, ?,?,?,?, ?,?, ?,?,?);`
 
 // writeSummaries inserts a batch of completed-request rows in one transaction.
 // Persistence is best-effort: any DB error is logged and the batch is dropped
@@ -263,6 +314,7 @@ func (s *Store) writeSummaries(batch []optaris.Event) {
 			r.firstTokenMs,
 			r.inputTokens, r.cacheReadTokens, r.cacheWrite5m, r.cacheWrite1h,
 			r.outputTokens, r.reasoningTokens,
+			r.clientType, r.sessionID, r.upstreamsTried,
 		); err != nil {
 			log.Printf("summary insert failed req_id=%s: %v", r.reqID, err)
 		}
@@ -295,22 +347,29 @@ type reqRow struct {
 	cacheWrite1h    any
 	outputTokens    any
 	reasoningTokens any
+
+	clientType     string
+	sessionID      string
+	upstreamsTried int
 }
 
 // summaryRow projects an Event onto the requests row. It reads only scalar summary
 // fields — never Channel.APIKey, never request/response bodies.
 func summaryRow(ev *optaris.Event) reqRow {
 	r := reqRow{
-		reqID:       ev.ReqID,
-		at:          ev.At.UnixMilli(),
-		groupID:     ev.GroupID,
-		model:       ev.Model,
-		stream:      boolToInt(ev.Stream),
-		channelID:   ev.ChannelID,
-		channelName: ev.ChannelName,
-		outcome:     ev.Outcome,
-		httpStatus:  ev.HTTPStatus,
-		failClass:   ev.FailClass,
+		reqID:          ev.ReqID,
+		at:             ev.At.UnixMilli(),
+		groupID:        ev.GroupID,
+		model:          ev.Model,
+		stream:         boolToInt(ev.Stream),
+		channelID:      ev.ChannelID,
+		channelName:    ev.ChannelName,
+		outcome:        ev.Outcome,
+		httpStatus:     ev.HTTPStatus,
+		failClass:      ev.FailClass,
+		clientType:     ev.ClientType,
+		sessionID:      ev.SessionID,
+		upstreamsTried: ev.UpstreamsTried,
 	}
 	if ev.FirstTokenMs != nil {
 		r.firstTokenMs = *ev.FirstTokenMs

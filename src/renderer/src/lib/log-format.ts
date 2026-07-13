@@ -32,3 +32,20 @@ export function fmtTime(at: number): string {
 export function fmtNum(n: number | null): string {
   return typeof n === 'number' ? String(n) : '—'
 }
+
+/**
+ * Localize a client type (claude_code / claude_desktop / codex / …); fall back to the raw value for
+ * anything unmapped, and the "unknown" label for empty/null (no client rule matched the UA).
+ */
+export function clientLabel(t: TFunction, clientType: string | null): string {
+  if (!clientType) return t('logs.clients.unknown')
+  const key = `logs.clients.${clientType}`
+  const label = t(key)
+  return label === key ? clientType : label
+}
+
+/** Render the stream flag stored as 0/1/null in the summary DB: streaming / non-streaming / '—'. */
+export function streamLabel(t: TFunction, stream: number | null): string {
+  if (typeof stream !== 'number') return '—'
+  return stream ? t('logs.streamYes') : t('logs.streamNo')
+}

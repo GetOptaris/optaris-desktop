@@ -21,7 +21,8 @@ const MAX_LIMIT = 1000
 const COLUMNS =
   'req_id, at, group_id, model, stream, channel_id, channel_name, outcome, http_status, ' +
   'fail_class, first_token_ms, input_tokens, cache_read_tokens, cache_write_5m_tokens, ' +
-  'cache_write_1h_tokens, output_tokens, reasoning_tokens'
+  'cache_write_1h_tokens, output_tokens, reasoning_tokens, ' +
+  'client_type, session_id, upstreams_tried'
 
 function clampLimit(limit: number | undefined): number {
   if (typeof limit !== 'number' || !Number.isFinite(limit)) return DEFAULT_LIMIT
