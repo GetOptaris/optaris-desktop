@@ -35,7 +35,8 @@
     "build:mac:x64": "npm run build:gateway:mac:x64 && electron-vite build && electron-builder --mac --x64",
     "build:mac": "npm run build:mac:arm64 && npm run build:mac:x64",
     "build:linux": "npm run build:gateway:linux && electron-vite build && electron-builder --linux",
-    "deploy:mac": "bash scripts/deploy-mac.sh"
+    "deploy:mac": "bash scripts/deploy-mac.sh",
+    "gen:runtime-icon": "sips -s format png --resampleWidth 512 build/icon.svg --out resources/icon.png"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
