@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
   LayoutDashboardIcon,
@@ -46,6 +46,13 @@ function App(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setScrollTarget(null)
   }, [scrollTarget])
+
+  // Reset the content scroll position when switching tabs — the scroll container
+  // is shared across tabs and isn't remounted, so it keeps the previous scrollTop.
+  const contentRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0 })
+  }, [tab])
 
   const isConfigTab = tab === 'channels' || tab === 'groups' || tab === 'settings'
   const needsDraft = tab !== 'logs'
@@ -122,7 +129,7 @@ function App(): React.JSX.Element {
           ) : null}
         </header>
 
-        <div className="min-h-0 flex-1 overflow-auto p-6">
+        <div ref={contentRef} className="min-h-0 flex-1 overflow-auto p-6">
           {needsDraft && !draft ? (
             <p className="text-sm text-muted-foreground">
               {config.error ? config.error : t('common.loading')}
