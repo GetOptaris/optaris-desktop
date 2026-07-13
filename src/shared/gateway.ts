@@ -135,6 +135,12 @@ export interface LogRow {
   cache_write_1h_tokens: number | null
   output_tokens: number | null
   reasoning_tokens: number | null
+  /** Client identity classified from the User-Agent (claude_code / claude_desktop / codex); '' or null = unknown. */
+  client_type: string | null
+  /** Session identifier parsed from the request (header or body), null when the format has no session concept. */
+  session_id: string | null
+  /** Number of distinct upstream channels attempted (retries against the same channel are not counted). */
+  upstreams_tried: number | null
 }
 
 /** Identifies one request when fetching its raw capture (see queryTrace). */

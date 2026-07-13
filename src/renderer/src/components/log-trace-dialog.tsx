@@ -1,7 +1,14 @@
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import { fmtNum, fmtTime, outcomeBadgeClass, outcomeLabel } from '@/lib/log-format'
+import {
+  clientLabel,
+  fmtNum,
+  fmtTime,
+  outcomeBadgeClass,
+  outcomeLabel,
+  streamLabel
+} from '@/lib/log-format'
 import { useT } from '@/i18n'
 import type { TFunction } from '@/i18n'
 import type { LogRow, TraceAttempt, TraceRecord } from '../../../shared/gateway'
@@ -12,6 +19,8 @@ interface LogTraceDialogProps {
   /** Raw capture for `row`, or null when none was recorded (see queryTrace). */
   trace: TraceRecord | null
   loading: boolean
+  /** Resolve a group id to its display name (shared with the log table). */
+  groupNameOf: (id: string | null) => string
   onClose: () => void
 }
 
@@ -152,6 +161,7 @@ export function LogTraceDialog({
   row,
   trace,
   loading,
+  groupNameOf,
   onClose
 }: LogTraceDialogProps): React.JSX.Element {
   const t = useT()
@@ -172,6 +182,11 @@ export function LogTraceDialog({
               <Meta label={t('logs.status')}>{fmtNum(row.http_status)}</Meta>
               <Meta label={t('logs.channel')}>{row.channel_name || '—'}</Meta>
               <Meta label={t('logs.model')}>{row.model || '—'}</Meta>
+              <Meta label={t('logs.clientType')}>{clientLabel(t, row.client_type)}</Meta>
+              <Meta label={t('logs.group')}>{groupNameOf(row.group_id)}</Meta>
+              <Meta label={t('logs.stream')}>{streamLabel(t, row.stream)}</Meta>
+              <Meta label={t('logs.upstreamsTried')}>{fmtNum(row.upstreams_tried)}</Meta>
+              <Meta label={t('logs.sessionId')}>{row.session_id || '—'}</Meta>
               <Meta label={t('logs.detail.reqId')}>{row.req_id}</Meta>
             </dl>
           ) : null}
