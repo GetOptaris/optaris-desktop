@@ -50,13 +50,9 @@ linux:
     - AppImage
     - snap
     - deb
-  maintainer: GetOptaris <support@getoptaris.com>
-  description: Local LLM gateway desktop app — route OpenAI/Claude/Gemini traffic across your upstream providers.
+  # maintainer/description default to package.json author/description.
   category: Utility
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
-publish:
-  provider: github
-  owner: GetOptaris
-  repo: optaris-desktop
+# publish (github provider) is derived from package.json "repository".
