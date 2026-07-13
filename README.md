@@ -37,14 +37,8 @@ provider keys never leave the app.
 - **Drop-in for four API formats.** Speaks OpenAI Chat Completions, OpenAI
   Responses, Anthropic Messages, and Gemini, so most clients work by changing only
   their base URL.
-- **Channels & groups.** Register providers as *channels*, bundle them into
-  *groups*, and pick the default group every request routes through.
-- **Local admission key.** Optaris issues its own `sk-optaris-…` key that clients
-  must present, so no other process on your machine can use the gateway blindly.
 - **Request logs & capture.** Every request is summarized (outcome, latency, token
   usage), with optional full capture for inspection — auth headers redacted.
-- **Live config.** Changes you make in the UI take effect immediately, no restart.
-- **Bilingual & dark mode.** English / 简体中文, following your system by default.
 
 ## Getting started
 
