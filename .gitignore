@@ -8,3 +8,4 @@ out
 
 # Compiled gateway sidecar binaries (built by scripts/build-gateway.sh)
 /resources/bin/
+/gateway/optaris-gateway
