@@ -3,12 +3,13 @@ import { toast } from 'sonner'
 import { CheckIcon, CopyIcon, EyeIcon, EyeOffIcon, RefreshCwIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 import { copyText } from '@/lib/clipboard'
 import { useT } from '@/i18n'
 import type { ConfigDraft } from '@/hooks/useGatewayConfig'
 
 /** Tabs the quick-start steps can jump to (kept in sync with App's Tab union). */
-export type NavigableTab = 'channels' | 'groups' | 'settings'
+export type NavigableTab = 'channels' | 'groups' | 'logs' | 'settings'
 
 interface DashboardPanelProps {
   draft: ConfigDraft
@@ -27,8 +28,6 @@ export function DashboardPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-muted-foreground">{t('dashboard.subtitle')}</p>
-
       <GatewayCard t={t} apiKey={draft.gateway_api_key} onRegenerate={onRegenerateApiKey} />
 
       <Card>
@@ -51,7 +50,6 @@ export function DashboardPanel({
       <Card>
         <CardHeader>
           <CardTitle>{t('dashboard.quickStartTitle')}</CardTitle>
-          <CardDescription>{t('dashboard.quickStartDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <Step
@@ -66,13 +64,13 @@ export function DashboardPanel({
             desc={t('dashboard.step2Desc')}
             action={{ label: t('dashboard.goGroups'), onClick: () => onNavigate('groups') }}
           />
+          <Step n={3} title={t('dashboard.step3Title')} desc={t('dashboard.step3Desc')} />
           <Step
-            n={3}
-            title={t('dashboard.step3Title')}
-            desc={t('dashboard.step3Desc')}
-            action={{ label: t('dashboard.goSettings'), onClick: () => onNavigate('settings') }}
+            n={4}
+            title={t('dashboard.step4Title')}
+            desc={t('dashboard.step4Desc')}
+            action={{ label: t('dashboard.goLogs'), onClick: () => onNavigate('logs') }}
           />
-          <Step n={4} title={t('dashboard.step4Title')} desc={t('dashboard.step4Desc')} />
         </CardContent>
       </Card>
     </div>
@@ -213,47 +211,44 @@ function GatewayCard({
           >
             {keyCopied ? <CheckIcon className="size-4" /> : <CopyIcon className="size-4" />}
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="size-9 shrink-0"
+            onClick={() => setConfirming(true)}
+            disabled={!key || regenerating}
+            aria-label={t('dashboard.apiKeyRegenerate')}
+          >
+            <RefreshCwIcon className={cn('size-4', regenerating && 'animate-spin')} />
+          </Button>
         </div>
-        <p className="mt-1.5 text-sm text-muted-foreground">{t('dashboard.apiKeyNote')}</p>
 
-        <div className="mt-3">
-          {confirming ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm text-muted-foreground">
-                {t('dashboard.apiKeyRegenerateConfirm')}
-              </span>
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                onClick={onRegenerate}
-                disabled={regenerating}
-              >
-                {t('dashboard.apiKeyRegenerate')}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setConfirming(false)}
-                disabled={regenerating}
-              >
-                {t('dashboard.apiKeyRegenerateCancel')}
-              </Button>
-            </div>
-          ) : (
+        {confirming ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {t('dashboard.apiKeyRegenerateConfirm')}
+            </span>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={onRegenerate}
+              disabled={regenerating}
+            >
+              {t('dashboard.apiKeyRegenerate')}
+            </Button>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setConfirming(true)}
-              disabled={!key}
+              onClick={() => setConfirming(false)}
+              disabled={regenerating}
             >
-              <RefreshCwIcon className="size-4" />
-              {t('dashboard.apiKeyRegenerate')}
+              {t('dashboard.apiKeyRegenerateCancel')}
             </Button>
-          )}
-        </div>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   )

@@ -1,5 +1,4 @@
 appId: com.getoptaris.desktop
-productName: Optaris
 copyright: Copyright © 2026 GetOptaris
 directories:
   buildResources: build
