@@ -68,12 +68,20 @@ export function registerGatewayIpc(gateway: GatewayManager): void {
   // Regenerate the single client-facing gateway API key and return the new value so the
   // dashboard can show it. The sidecar hot-reloads it on its own via mtime polling. Rotating
   // the key would 401 every connected client, so we re-apply the new key into each client
-  // still pointed here (report which back for the toast). Re-apply runs after the key is
-  // persisted, so applyClient's ensureGatewayApiKey reads the fresh value.
+  // still pointed here (report which succeeded/failed back for the toast). Re-apply runs after
+  // the key is persisted, so applyClient's ensureGatewayApiKey reads the fresh value. The key
+  // is rotated regardless: re-apply is best-effort, and its failure must not turn a successful
+  // rotation into a reported failure (which would leave the UI showing the stale key).
   ipcMain.handle(GATEWAY_IPC.regenerateApiKey, async (): Promise<RegenerateApiKeyResult> => {
     const key = await regenerateGatewayApiKey()
-    const reapplied = await reapplyConnectedClients(gateway)
-    return { key, reapplied }
+    try {
+      const { reapplied, failed } = await reapplyConnectedClients(gateway)
+      return { key, reapplied, failed }
+    } catch {
+      // Couldn't even list the clients (e.g. gateway not ready). The key is already rotated;
+      // report it as successful with nothing re-applied rather than as a failed regenerate.
+      return { key, reapplied: [], failed: [] }
+    }
   })
 
   // Report each auto-configurable client's current wiring (installed / base URL / connected)

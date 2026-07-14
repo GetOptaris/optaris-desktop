@@ -27,6 +27,8 @@ const en = {
     apiKeyCopied: 'API key copied',
     apiKeyRegenerated: 'New API key generated',
     apiKeyRegeneratedReapplied: 'New key generated and re-applied to {count} client(s)',
+    apiKeyRegeneratedPartial:
+      'New key generated, but couldn’t re-connect {clients} — re-connect manually',
     apiKeyRegenerateFailed: 'Failed to generate a new API key'
   },
   dashboard: {

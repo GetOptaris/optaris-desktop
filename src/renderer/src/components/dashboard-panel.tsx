@@ -35,10 +35,6 @@ export function DashboardPanel({
   const t = useT()
   const defaultGroup = draft.groups.find((g) => g.id === draft.default_group_id)
 
-  // Bumped when the Gateway card rotates the key and re-applies it to connected clients, so
-  // the (sibling) ConnectClientsCard re-fetches and shows the new wiring.
-  const [reconnectNonce, setReconnectNonce] = useState(0)
-
   // Quick-start step 3 offers a shortcut down to the one-click connect section (a sibling
   // card in the same scroll container), so the user doesn't have to know to scroll for it.
   const connectRef = useRef<HTMLDivElement>(null)
@@ -67,15 +63,10 @@ export function DashboardPanel({
       </Card>
 
       <div ref={connectRef}>
-        <ConnectClientsCard refreshSignal={reconnectNonce} />
+        <ConnectClientsCard />
       </div>
 
-      <GatewayCard
-        t={t}
-        apiKey={draft.gateway_api_key}
-        onRegenerate={onRegenerateApiKey}
-        onReapplied={() => setReconnectNonce((n) => n + 1)}
-      />
+      <GatewayCard t={t} apiKey={draft.gateway_api_key} onRegenerate={onRegenerateApiKey} />
     </div>
   )
 }
@@ -173,14 +164,11 @@ function maskKey(key: string): string {
 function GatewayCard({
   t,
   apiKey,
-  onRegenerate: onRegenerateKey,
-  onReapplied
+  onRegenerate: onRegenerateKey
 }: {
   t: (key: string, vars?: Record<string, string | number>) => string
   apiKey: string
   onRegenerate: (key: string) => void
-  /** Called after a regenerate re-applies the new key, so siblings can refresh. */
-  onReapplied: () => void
 }): React.JSX.Element {
   const [baseUrl, setBaseUrl] = useState('')
   const [copied, setCopied] = useState(false)
@@ -236,11 +224,15 @@ function GatewayCard({
   const onRegenerate = async (): Promise<void> => {
     setRegenerating(true)
     try {
-      const { key: next, reapplied } = await window.api.gateway.regenerateApiKey()
+      const { key: next, reapplied, failed } = await window.api.gateway.regenerateApiKey()
       onRegenerateKey(next)
       setRevealed(true)
-      if (reapplied.length > 0) {
-        onReapplied()
+      if (failed.length > 0) {
+        // Some connected clients still hold the stale key — name them so the user can
+        // re-connect those by hand (the rest were re-applied automatically).
+        const clients = failed.map((id) => t(`connect.clients.${id}`)).join(', ')
+        toast.warning(t('toast.apiKeyRegeneratedPartial', { clients }))
+      } else if (reapplied.length > 0) {
         toast.success(t('toast.apiKeyRegeneratedReapplied', { count: reapplied.length }))
       } else {
         toast.success(t('toast.apiKeyRegenerated'))

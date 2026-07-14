@@ -25,6 +25,7 @@ const zh: Dict = {
     apiKeyCopied: 'API Key 已复制',
     apiKeyRegenerated: '已生成新的 API Key',
     apiKeyRegeneratedReapplied: '已生成新 Key 并重新接入 {count} 个客户端',
+    apiKeyRegeneratedPartial: '已生成新 Key,但未能重新接入 {clients},请手动重新连接',
     apiKeyRegenerateFailed: '生成新 API Key 失败'
   },
   dashboard: {
