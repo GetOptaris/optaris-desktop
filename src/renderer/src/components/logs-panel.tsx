@@ -29,6 +29,7 @@ import {
 } from '@/lib/log-format'
 import { useT } from '@/i18n'
 import { LogTraceDialog } from './log-trace-dialog'
+import { DEFAULT_GROUP_ID } from '../../../shared/gateway'
 import type { DisplayGroup, LogQuery, LogRow, TraceRecord } from '../../../shared/gateway'
 
 const ALL = '__all__'
@@ -65,11 +66,17 @@ export function LogsPanel(): React.JSX.Element {
     [t]
   )
 
-  // Resolve a group id to its display name; falls back to the raw id when unknown, '—' when absent.
+  // Resolve a group id to its display name; '—' when absent. The built-in group's wire name
+  // is empty (localized here), and an unnamed user group has an empty name too — so fall back
+  // on the raw id with `||` (not `??`) so an empty string never renders as a blank cell.
   const groupNameOf = useMemo(() => {
     const byId = new Map(groups.map((g) => [g.id, g.name]))
-    return (id: string | null): string => (id ? (byId.get(id) ?? id) : '—')
-  }, [groups])
+    return (id: string | null): string => {
+      if (!id) return '—'
+      if (id === DEFAULT_GROUP_ID) return t('groups.defaultName')
+      return byId.get(id) || id
+    }
+  }, [groups, t])
 
   const runQuery = useCallback(async (filters: { outcome: string; model: string }) => {
     setLoading(true)
