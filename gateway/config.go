@@ -27,6 +27,14 @@ import (
 // written by the parent. A couple of seconds is plenty for a desktop control plane.
 const configPollInterval = 2 * time.Second
 
+// builtinDefaultGroupID is the id of the synthesized "all channels" group. It is never
+// stored on disk: loadConfig injects it into the engine snapshot at load time with members
+// equal to every channel, so a request routed to it fans out over all channels (the router
+// still filters by Enabled). It is the fallback route when no explicit default group is set,
+// which lets a fresh install route as soon as a channel exists — no group to create first.
+// Keep in sync with DEFAULT_GROUP_ID in src/shared/gateway.ts.
+const builtinDefaultGroupID = "grp_default"
+
 // wireChannel is the on-disk JSON shape of one upstream channel. It mirrors
 // model.Channel (which has no json tags of its own) with an explicit snake_case
 // contract. APIKey is the plaintext upstream credential.
@@ -120,8 +128,18 @@ func loadConfig(path string) (optaris.Config, configMeta, error) {
 		}
 	}
 
-	groups := make([]model.Group, 0, len(gc.Groups))
+	// Reserve one extra slot for the synthesized built-in group appended below.
+	groups := make([]model.Group, 0, len(gc.Groups)+1)
+	allChannelIDs := make([]string, 0, len(channels))
+	for _, c := range channels {
+		allChannelIDs = append(allChannelIDs, c.ID)
+	}
 	for _, g := range gc.Groups {
+		// Drop any on-disk group that collides with the built-in id (a hand-edited or
+		// legacy config); the synthesized one below is the single source of truth for it.
+		if g.ID == builtinDefaultGroupID {
+			continue
+		}
 		groups = append(groups, model.Group{
 			ID:         g.ID,
 			Name:       g.Name,
@@ -130,10 +148,18 @@ func loadConfig(path string) (optaris.Config, configMeta, error) {
 			UpdatedAt:  g.UpdatedAt,
 		})
 	}
+	// The built-in "all channels" group: not persisted anywhere, synthesized here so the
+	// engine snapshot contains it (routing and GroupModels both require the group to exist).
+	// Its members are every channel; the router applies the per-channel Enabled filter.
+	groups = append(groups, model.Group{
+		ID:         builtinDefaultGroupID,
+		Name:       "All channels",
+		ChannelIDs: allChannelIDs,
+	})
 
 	cfg := optaris.Config{Groups: groups, Channels: channels, Settings: s}
 	meta := configMeta{
-		defaultGroupID: resolveDefaultGroup(gc.DefaultGroupID, groups),
+		defaultGroupID: resolveDefaultGroup(gc.DefaultGroupID),
 		apiKey:         gc.GatewayAPIKey,
 		secrets:        secrets,
 	}
@@ -141,16 +167,15 @@ func loadConfig(path string) (optaris.Config, configMeta, error) {
 }
 
 // resolveDefaultGroup picks the group every request routes to: the explicit
-// default_group_id when set, otherwise the first group, otherwise empty (which the
-// engine treats as "no route" and rejects — fail-loud, as intended).
-func resolveDefaultGroup(explicit string, groups []model.Group) string {
+// default_group_id when set, otherwise the built-in "all channels" group. The built-in
+// group is always present in the snapshot (loadConfig synthesizes it), so an empty
+// default_group_id — a fresh install, a legacy config, or a user who cleared it — routes
+// over all channels rather than failing.
+func resolveDefaultGroup(explicit string) string {
 	if explicit != "" {
 		return explicit
 	}
-	if len(groups) > 0 {
-		return groups[0].ID
-	}
-	return ""
+	return builtinDefaultGroupID
 }
 
 // configHolder holds the current configMeta behind an atomic pointer so the

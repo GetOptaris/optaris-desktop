@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 import { copyText } from '@/lib/clipboard'
 import { useT } from '@/i18n'
 import { ConnectClientsCard } from '@/components/connect-clients-card'
+import { DEFAULT_GROUP_ID } from '../../../shared/gateway'
 import type { ConfigDraft } from '@/hooks/useGatewayConfig'
 
 /** Tabs the quick-start steps can jump to (kept in sync with App's Tab union). */
@@ -34,6 +35,13 @@ export function DashboardPanel({
 }: DashboardPanelProps): React.JSX.Element {
   const t = useT()
   const defaultGroup = draft.groups.find((g) => g.id === draft.default_group_id)
+  // The built-in group carries an empty wire name; localize it. Count only user-created
+  // groups so an install with just the built-in group reads "0", not "1".
+  const activeGroupName =
+    draft.default_group_id === DEFAULT_GROUP_ID
+      ? t('groups.defaultName')
+      : defaultGroup?.name || (draft.default_group_id ? draft.default_group_id : t('common.none'))
+  const userGroupCount = draft.groups.filter((g) => g.id !== DEFAULT_GROUP_ID).length
 
   // Quick-start step 3 offers a shortcut down to the one-click connect section (a sibling
   // card in the same scroll container), so the user doesn't have to know to scroll for it.
@@ -51,14 +59,8 @@ export function DashboardPanel({
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3">
           <Stat label={t('dashboard.channelsCount')} value={String(draft.channels.length)} />
-          <Stat label={t('dashboard.groupsCount')} value={String(draft.groups.length)} />
-          <Stat
-            label={t('dashboard.defaultGroup')}
-            value={
-              defaultGroup?.name ||
-              (draft.default_group_id ? draft.default_group_id : t('common.none'))
-            }
-          />
+          <Stat label={t('dashboard.groupsCount')} value={String(userGroupCount)} />
+          <Stat label={t('dashboard.defaultGroup')} value={activeGroupName} />
         </CardContent>
       </Card>
 
@@ -136,18 +138,12 @@ function QuickStartCard({
             n={2}
             title={t('dashboard.step2Title')}
             desc={t('dashboard.step2Desc')}
-            action={{ label: t('dashboard.goGroups'), onClick: () => onNavigate('groups') }}
+            action={{ label: t('dashboard.goConnect'), onClick: onScrollToConnect }}
           />
           <Step
             n={3}
             title={t('dashboard.step3Title')}
             desc={t('dashboard.step3Desc')}
-            action={{ label: t('dashboard.goConnect'), onClick: onScrollToConnect }}
-          />
-          <Step
-            n={4}
-            title={t('dashboard.step4Title')}
-            desc={t('dashboard.step4Desc')}
             action={{ label: t('dashboard.goLogs'), onClick: () => onNavigate('logs') }}
           />
         </CardContent>

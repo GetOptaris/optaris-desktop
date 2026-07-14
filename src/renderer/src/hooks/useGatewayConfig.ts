@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { DEFAULT_GROUP_ID } from '../../../shared/gateway'
 import type {
   ChannelInput,
   ConfigInput,
@@ -117,15 +118,21 @@ function buildInput(draft: ConfigDraft): ConfigInput {
   })
 
   return {
-    default_group_id: draft.default_group_id || '',
+    // The active group is never empty; fall back to the built-in group to match the main
+    // process (mergeConfig) and the gateway.
+    default_group_id: draft.default_group_id || DEFAULT_GROUP_ID,
     channels,
-    groups: draft.groups.map((g) => ({
-      id: g.id,
-      name: g.name.trim(),
-      channel_ids: g.channel_ids,
-      created_at: g.created_at,
-      updated_at: g.updated_at
-    })),
+    // The built-in group is synthesized on read and stripped on write by the main process;
+    // drop it here too so a save only ever carries user-created groups.
+    groups: draft.groups
+      .filter((g) => g.id !== DEFAULT_GROUP_ID)
+      .map((g) => ({
+        id: g.id,
+        name: g.name.trim(),
+        channel_ids: g.channel_ids,
+        created_at: g.created_at,
+        updated_at: g.updated_at
+      })),
     settings: draft.settings
   }
 }
@@ -223,8 +230,9 @@ export function useGatewayConfig(): UseGatewayConfig {
     setDirty(true)
   }, [])
 
+  // The active group is never empty; a blank id falls back to the built-in group.
   const setDefaultGroupId = useCallback(
-    (id: string) => edit((d) => ({ ...d, default_group_id: id })),
+    (id: string) => edit((d) => ({ ...d, default_group_id: id || DEFAULT_GROUP_ID })),
     [edit]
   )
 
@@ -322,23 +330,30 @@ export function useGatewayConfig(): UseGatewayConfig {
     return id
   }, [edit])
 
+  // The built-in group is read-only (members always equal every channel); ignore edits to
+  // it. The UI disables its controls, but guarding here keeps the invariant even if called.
   const updateGroup = useCallback(
-    (id: string, patch: Partial<GroupDraft>) =>
+    (id: string, patch: Partial<GroupDraft>) => {
+      if (id === DEFAULT_GROUP_ID) return
       edit((d) => ({
         ...d,
         groups: d.groups.map((g) => (g.id === id ? { ...g, ...patch } : g))
-      })),
+      }))
+    },
     [edit]
   )
 
-  // Removing a group also clears default_group_id if it pointed here.
+  // The built-in group cannot be removed. Removing a user group that was the active group
+  // falls back to the built-in group (the active group is never empty).
   const removeGroup = useCallback(
-    (id: string) =>
+    (id: string) => {
+      if (id === DEFAULT_GROUP_ID) return
       edit((d) => ({
         ...d,
         groups: d.groups.filter((g) => g.id !== id),
-        default_group_id: d.default_group_id === id ? '' : d.default_group_id
-      })),
+        default_group_id: d.default_group_id === id ? DEFAULT_GROUP_ID : d.default_group_id
+      }))
+    },
     [edit]
   )
 

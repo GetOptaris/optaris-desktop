@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { randomBytes } from 'node:crypto'
 import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { DEFAULT_GROUP_ID } from '../shared/gateway'
 import type { ConfigInput, DisplayConfig } from '../shared/gateway'
 
 /**
@@ -63,9 +64,14 @@ export interface GatewayConfig {
   settings: GatewaySettings
 }
 
-/** An empty but valid config: no channels/groups yet, all settings at defaults. */
+/**
+ * An empty but valid config: no channels/groups yet, all settings at defaults. The active
+ * group defaults to the built-in "all channels" group (synthesized by the gateway and by
+ * sanitizeConfig, never stored in `groups`), so a fresh install routes as soon as a channel
+ * exists — the user never has to create a group first.
+ */
 const DEFAULT_CONFIG: GatewayConfig = {
-  default_group_id: '',
+  default_group_id: DEFAULT_GROUP_ID,
   gateway_api_key: '',
   channels: [],
   groups: [],
@@ -217,13 +223,27 @@ export function sanitizeConfig(config: GatewayConfig): DisplayConfig {
       created_at: c.created_at,
       updated_at: c.updated_at
     })),
-    groups: config.groups.map((g) => ({
-      id: g.id,
-      name: g.name,
-      channel_ids: g.channel_ids,
-      created_at: g.created_at,
-      updated_at: g.updated_at
-    })),
+    // The built-in "all channels" group is synthesized here (never read from disk) so the
+    // renderer's group list, active-group picker, and log group→name map all see it. Its
+    // members are computed live from the current channels, matching the gateway's own
+    // synthesis in gateway/config.go. name is left empty — the renderer localizes it. Any
+    // stored group colliding with the built-in id is dropped so it can't appear twice.
+    groups: [
+      {
+        id: DEFAULT_GROUP_ID,
+        name: '',
+        channel_ids: config.channels.map((c) => c.id)
+      },
+      ...config.groups
+        .filter((g) => g.id !== DEFAULT_GROUP_ID)
+        .map((g) => ({
+          id: g.id,
+          name: g.name,
+          channel_ids: g.channel_ids,
+          created_at: g.created_at,
+          updated_at: g.updated_at
+        }))
+    ],
     settings: { ...config.settings }
   }
 }
@@ -249,6 +269,10 @@ export function validateConfigInput(input: ConfigInput): void {
   }
   const groupIds = new Set<string>()
   for (const g of input.groups) {
+    // The built-in group is synthesized into the read shape and stripped from the write
+    // shape (mergeConfig); the renderer may echo it back, so skip it here rather than
+    // rejecting an otherwise-valid save.
+    if (g.id === DEFAULT_GROUP_ID) continue
     if (!g.id || typeof g.id !== 'string')
       throw new Error('invalid config: every group needs an id')
     if (groupIds.has(g.id)) throw new Error(`invalid config: duplicate group id ${g.id}`)
@@ -282,15 +306,22 @@ export function mergeConfig(current: GatewayConfig, input: ConfigInput): Gateway
       updated_at: c.updated_at
     }
   })
-  const groups: GatewayGroup[] = input.groups.map((g) => ({
-    id: g.id,
-    name: g.name,
-    channel_ids: g.channel_ids,
-    created_at: g.created_at,
-    updated_at: g.updated_at
-  }))
+  // Strip the built-in group before persisting: it is synthesized on read (sanitizeConfig)
+  // and by the gateway at load time, so writing it back would leave a stale, self-duplicating
+  // copy on disk. Only user-created groups are stored.
+  const groups: GatewayGroup[] = input.groups
+    .filter((g) => g.id !== DEFAULT_GROUP_ID)
+    .map((g) => ({
+      id: g.id,
+      name: g.name,
+      channel_ids: g.channel_ids,
+      created_at: g.created_at,
+      updated_at: g.updated_at
+    }))
   return {
-    default_group_id: input.default_group_id ?? '',
+    // The active group is never empty: an omitted/blank value falls back to the built-in
+    // group, matching resolveDefaultGroup in gateway/config.go so disk and gateway agree.
+    default_group_id: input.default_group_id || DEFAULT_GROUP_ID,
     // The renderer never sends the gateway key back, so always keep the stored one.
     // It is changed only through regenerateGatewayApiKey, never a plain config save.
     gateway_api_key: current.gateway_api_key ?? '',
