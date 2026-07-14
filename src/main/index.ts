@@ -5,6 +5,7 @@ import icon from '../../resources/icon.png?asset'
 import { GatewayManager } from './gateway'
 import { ensureConfig, ensureDataDir, ensureGatewayApiKey } from './config'
 import { registerGatewayIpc } from './ipc'
+import { initUpdater, registerUpdaterIpc } from './updater'
 
 // The optaris-gateway sidecar: spawned on ready, killed on quit.
 const gateway = new GatewayManager()
@@ -60,6 +61,10 @@ app.whenReady().then(() => {
   // always finds them.
   registerGatewayIpc(gateway)
 
+  // App self-update IPC. Registered here alongside the gateway handlers; initUpdater
+  // (which needs a window to push events to) runs after createWindow below.
+  registerUpdaterIpc()
+
   // Prepare the gateway's config file and data dir, then start the sidecar. The
   // config must exist before the gateway spawns (it loads it at startup), so we
   // await those two quick fs ops; the gateway start itself is not awaited — failures
@@ -76,6 +81,10 @@ app.whenReady().then(() => {
     })
 
   createWindow()
+
+  // Start the updater once a window exists to receive its push events. It resolves the
+  // current window lazily so it survives macOS window re-creation on activate.
+  initUpdater(() => BrowserWindow.getAllWindows()[0] ?? null)
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the

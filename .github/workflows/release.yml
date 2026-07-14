@@ -1,0 +1,119 @@
+name: Release
+
+# Push a version tag (e.g. v1.0.0) to build all platforms and publish to a GitHub
+# Release. A single prerequisite job creates the DRAFT release once; the three OS
+# jobs then upload into it via electron-builder (-p always). Review the draft, then
+# publish it.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # create/update the GitHub Release
+
+# Serialize runs for the same tag so a re-push can't race an in-flight run into the
+# same draft release. A newer run cancels the older one rather than overlapping it.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Create the draft release exactly once, before any matrix job runs. electron-builder
+  # finds a release by version and would otherwise have each parallel OS job hit the
+  # "no release exists -> create one" branch at the same time, racing to create
+  # duplicate drafts. Pre-creating it means every OS job only *uploads* into the
+  # existing draft. `gh release create` is also where we gate the tag/version match, so
+  # a mismatch fails before anything is built or published.
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout optaris-desktop
+        uses: actions/checkout@v7
+
+      # electron-builder names artifacts and finds the release by package.json version,
+      # so a tag that doesn't match would publish under the wrong version. Fail early.
+      - name: Verify tag matches package.json version
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::tag $GITHUB_REF_NAME (=$TAG) != package.json version $PKG"
+            exit 1
+          fi
+          echo "tag matches version $PKG"
+
+      # Idempotent: if the draft already exists (e.g. a re-run after a per-OS failure),
+      # skip creation instead of erroring. electron-builder uploads into whichever draft
+      # carries this tag.
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "draft release $GITHUB_REF_NAME already exists — skipping create"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --draft \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes
+          fi
+
+  release:
+    needs: create-release
+    strategy:
+      fail-fast: false # one platform failing shouldn't block the others (re-run per-OS)
+      matrix:
+        include:
+          - os: macos-latest # builds arm64 + x64 in one job (unsigned; auto-update is detect-only)
+            build: build:mac:publish
+          - os: windows-latest # NSIS installer
+            build: build:win:publish
+          - os: ubuntu-latest # AppImage (self-updating) + deb (manual)
+            build: build:linux:publish
+    runs-on: ${{ matrix.os }}
+    steps:
+      # The gateway's Go module resolves optaris-core as a sibling directory
+      # (gateway/go.mod: replace => ../../optaris-core). Lay both repos out side by side
+      # under the workspace so `go build` resolves the local module.
+      - name: Checkout optaris-desktop
+        uses: actions/checkout@v7
+        with:
+          path: optaris-desktop
+
+      - name: Checkout optaris-core
+        uses: actions/checkout@v7
+        with:
+          repository: GetOptaris/optaris-core
+          ref: main
+          path: optaris-core
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+          cache-dependency-path: optaris-desktop/gateway/go.sum
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: optaris-desktop/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: optaris-desktop
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and publish
+        working-directory: optaris-desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # electron-builder GitHub publish
+        run: pnpm run ${{ matrix.build }}

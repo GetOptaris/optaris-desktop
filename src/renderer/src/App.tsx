@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
+import { UpdateNotifier } from '@/components/update-notifier'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { DashboardPanel } from '@/components/dashboard-panel'
@@ -177,6 +178,7 @@ function App(): React.JSX.Element {
       </main>
 
       <Toaster position="bottom-right" richColors />
+      <UpdateNotifier />
     </div>
   )
 }
