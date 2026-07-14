@@ -54,10 +54,10 @@ const en = {
     step3Title: 'Point your client',
     step3Desc: 'Set your client’s base URL to the gateway address above.',
     step4Title: 'View logs',
-    step4Desc:
-      'Inspect request records on the Logs page; enable request/response capture in Settings.',
+    step4Desc: 'Inspect request records on the Logs page.',
     goChannels: 'Go to Channels',
     goGroups: 'Go to Groups',
+    goConnect: 'Go to Connect',
     goLogs: 'Go to Logs'
   },
   connect: {

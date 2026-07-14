@@ -52,9 +52,10 @@ const zh: Dict = {
     step3Title: '指向客户端',
     step3Desc: '把客户端的 base URL 设为上方的网关地址。',
     step4Title: '查看日志',
-    step4Desc: '在日志页查看请求记录；可在「设置」中开启抓取请求与响应正文。',
+    step4Desc: '在日志页查看请求记录。',
     goChannels: '前往渠道',
     goGroups: '前往分组',
+    goConnect: '前往接入',
     goLogs: '前往日志'
   },
   connect: {

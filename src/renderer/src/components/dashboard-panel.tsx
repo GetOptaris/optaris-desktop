@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
   CheckIcon,
@@ -39,9 +39,15 @@ export function DashboardPanel({
   // the (sibling) ConnectClientsCard re-fetches and shows the new wiring.
   const [reconnectNonce, setReconnectNonce] = useState(0)
 
+  // Quick-start step 3 offers a shortcut down to the one-click connect section (a sibling
+  // card in the same scroll container), so the user doesn't have to know to scroll for it.
+  const connectRef = useRef<HTMLDivElement>(null)
+  const scrollToConnect = (): void =>
+    connectRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+
   return (
     <div className="flex flex-col gap-4">
-      <QuickStartCard t={t} onNavigate={onNavigate} />
+      <QuickStartCard t={t} onNavigate={onNavigate} onScrollToConnect={scrollToConnect} />
 
       <Card>
         <CardHeader>
@@ -60,7 +66,9 @@ export function DashboardPanel({
         </CardContent>
       </Card>
 
-      <ConnectClientsCard refreshSignal={reconnectNonce} />
+      <div ref={connectRef}>
+        <ConnectClientsCard refreshSignal={reconnectNonce} />
+      </div>
 
       <GatewayCard
         t={t}
@@ -86,10 +94,12 @@ function readQuickStartCollapsed(): boolean {
 
 function QuickStartCard({
   t,
-  onNavigate
+  onNavigate,
+  onScrollToConnect
 }: {
   t: (key: string) => string
   onNavigate: (tab: NavigableTab) => void
+  onScrollToConnect: () => void
 }): React.JSX.Element {
   const [collapsed, setCollapsed] = useState(readQuickStartCollapsed)
 
@@ -137,7 +147,12 @@ function QuickStartCard({
             desc={t('dashboard.step2Desc')}
             action={{ label: t('dashboard.goGroups'), onClick: () => onNavigate('groups') }}
           />
-          <Step n={3} title={t('dashboard.step3Title')} desc={t('dashboard.step3Desc')} />
+          <Step
+            n={3}
+            title={t('dashboard.step3Title')}
+            desc={t('dashboard.step3Desc')}
+            action={{ label: t('dashboard.goConnect'), onClick: onScrollToConnect }}
+          />
           <Step
             n={4}
             title={t('dashboard.step4Title')}
