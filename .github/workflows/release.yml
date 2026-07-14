@@ -1,0 +1,84 @@
+name: Release
+
+# Push a version tag (e.g. v1.0.0) to build all platforms and publish to a GitHub
+# Release. electron-builder creates/uploads to a DRAFT release matching the tag; the
+# three OS jobs share it (same package.json version). Review the draft, then publish it.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # create/update the GitHub Release
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false # one platform failing shouldn't block the others (re-run per-OS)
+      matrix:
+        include:
+          - os: macos-latest # builds arm64 + x64 in one job (unsigned; auto-update is detect-only)
+            build: build:mac:publish
+          - os: windows-latest # NSIS installer
+            build: build:win:publish
+          - os: ubuntu-latest # AppImage (self-updating) + deb (manual)
+            build: build:linux:publish
+    runs-on: ${{ matrix.os }}
+    steps:
+      # The gateway's Go module resolves optaris-core as a sibling directory
+      # (gateway/go.mod: replace => ../../optaris-core). Lay both repos out side by side
+      # under the workspace so `go build` resolves the local module.
+      - name: Checkout optaris-desktop
+        uses: actions/checkout@v4
+        with:
+          path: optaris-desktop
+
+      - name: Checkout optaris-core
+        uses: actions/checkout@v4
+        with:
+          repository: GetOptaris/optaris-core
+          ref: main
+          path: optaris-core
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache-dependency-path: optaris-desktop/gateway/go.sum
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: optaris-desktop/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: optaris-desktop
+        run: pnpm install --frozen-lockfile
+
+      # Guard against tagging a version that doesn't match package.json — electron-builder
+      # names artifacts and finds the release by package.json version, so a mismatch would
+      # publish under the wrong version.
+      - name: Verify tag matches package.json version
+        working-directory: optaris-desktop
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::tag $GITHUB_REF_NAME (=$TAG) != package.json version $PKG"
+            exit 1
+          fi
+          echo "tag matches version $PKG"
+
+      - name: Build and publish
+        working-directory: optaris-desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # electron-builder GitHub publish
+        run: pnpm run ${{ matrix.build }}

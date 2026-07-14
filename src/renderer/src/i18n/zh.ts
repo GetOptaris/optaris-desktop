@@ -138,7 +138,25 @@ const zh: Dict = {
     theme: '主题',
     themeSystem: '跟随系统',
     themeLight: '浅色',
-    themeDark: '深色'
+    themeDark: '深色',
+    aboutTitle: '关于',
+    aboutDescription: '版本与更新。',
+    version: '版本'
+  },
+  update: {
+    checkForUpdates: '检查更新',
+    checking: '检查中…',
+    upToDate: '已是最新版本',
+    availableTitle: '发现新版本：{version}',
+    availableMacDescription: '请前往发布页下载新版本。',
+    download: '下载',
+    goDownloadPage: '打开下载页',
+    later: '稍后',
+    downloading: '下载中… {percent}%',
+    readyTitle: '更新已就绪',
+    readyDescription: '重启以完成更新到 {version}。',
+    restartNow: '立即重启',
+    error: '检查更新失败'
   },
   logs: {
     outcomePlaceholder: '结果',

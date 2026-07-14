@@ -142,7 +142,25 @@ const en = {
     theme: 'Theme',
     themeSystem: 'System',
     themeLight: 'Light',
-    themeDark: 'Dark'
+    themeDark: 'Dark',
+    aboutTitle: 'About',
+    aboutDescription: 'Version and updates.',
+    version: 'Version'
+  },
+  update: {
+    checkForUpdates: 'Check for updates',
+    checking: 'Checking…',
+    upToDate: 'You’re on the latest version',
+    availableTitle: 'Update available: {version}',
+    availableMacDescription: 'Download the new version from the release page.',
+    download: 'Download',
+    goDownloadPage: 'Open download page',
+    later: 'Later',
+    downloading: 'Downloading… {percent}%',
+    readyTitle: 'Update ready to install',
+    readyDescription: 'Restart to finish updating to {version}.',
+    restartNow: 'Restart now',
+    error: 'Update check failed'
   },
   logs: {
     outcomePlaceholder: 'Outcome',

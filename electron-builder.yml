@@ -52,9 +52,11 @@ dmg:
   # shipped as two separate per-arch artifacts rather than a universal build.
   artifactName: ${name}-${version}-${arch}.${ext}
 linux:
+  # AppImage carries the electron-updater feed (latest-linux.yml) so it self-updates;
+  # deb is a manual-install package. snap is intentionally omitted — it needs snapcraft
+  # in CI and its updates are managed by the Snap Store, not electron-updater.
   target:
     - AppImage
-    - snap
     - deb
   # maintainer/description default to package.json author/description.
   category: Utility
