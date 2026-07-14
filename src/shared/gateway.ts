@@ -191,6 +191,37 @@ export interface TraceRecord {
   committed_then_failed: boolean
 }
 
+/** The external client apps Optaris can auto-configure to point at the local gateway. */
+export type ClientId = 'claude_code' | 'claude_desktop' | 'codex' | 'gemini_cli'
+
+/**
+ * One client's current wiring, as reported by listClients. Drives the dashboard's
+ * "Connect your clients" card: `detected`/`connected` pick the status color and
+ * `current_base_url` shows where the client points today.
+ */
+export interface ClientStatus {
+  id: ClientId
+  /** False when this OS can't be auto-configured for the client (e.g. Claude Desktop on Linux). */
+  supported: boolean
+  /** The client's config exists on disk (installed / previously configured). */
+  detected: boolean
+  /** The client's config already points at this gateway (base URL match). */
+  connected: boolean
+  /** The base URL the client currently points at, or null when unset/undetected. */
+  current_base_url: string | null
+  /** Config file paths this client would write (for display / debugging). */
+  config_paths: string[]
+  /** Optional hint shown in the UI (e.g. restart required / experimental). */
+  note?: string
+}
+
+/** Result of applyClient: the files written and an optional human-readable message. */
+export interface ApplyClientResult {
+  ok: boolean
+  written_paths: string[]
+  message?: string
+}
+
 /** The gateway control-plane surface exposed on `window.api.gateway`. */
 export interface GatewayApi {
   /** Base URL clients point their base_url at (http://127.0.0.1:<port>). */
@@ -205,6 +236,10 @@ export interface GatewayApi {
   queryTrace: (params: TraceQuery) => Promise<TraceRecord | null>
   /** Replace the gateway's client-facing API key and return the new value. */
   regenerateApiKey: () => Promise<string>
+  /** List each auto-configurable client, its current base URL, and whether it points here. */
+  listClients: () => Promise<ClientStatus[]>
+  /** Point a client at this gateway by writing its config file(s). */
+  applyClient: (id: ClientId) => Promise<ApplyClientResult>
 }
 
 /**
@@ -217,5 +252,7 @@ export const GATEWAY_IPC = {
   updateConfig: 'gateway:update-config',
   queryLogs: 'gateway:query-logs',
   queryTrace: 'gateway:query-trace',
-  regenerateApiKey: 'gateway:regenerate-api-key'
+  regenerateApiKey: 'gateway:regenerate-api-key',
+  listClients: 'gateway:list-clients',
+  applyClient: 'gateway:apply-client'
 } as const

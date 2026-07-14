@@ -99,6 +99,9 @@ func main() {
 	mux.Handle("POST /v1/responses", withRoute(holder, eng.OpenAIResponsesHandler()))
 	mux.Handle("POST /v1/messages", withRoute(holder, eng.ClaudeHandler()))
 	mux.Handle("POST /v1beta/models/{modelAndMethod}", withRoute(holder, eng.GeminiHandler()))
+	// Read-only listing of the active group's servable models. No withRoute: it reads config
+	// directly and never runs the serve/failover pipeline. Auth is inherited from withAuth.
+	mux.Handle("GET /v1/models", modelsHandler(eng, holder))
 
 	// Bind first so we can report the actually-bound port (supports --port 0).
 	addr := net.JoinHostPort(*host, strconv.Itoa(*port))

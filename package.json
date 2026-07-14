@@ -41,7 +41,8 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
-    "electron-updater": "^6.3.9"
+    "electron-updater": "^6.3.9",
+    "smol-toml": "^1.7.0"
   },
   "devDependencies": {
     "@base-ui/react": "^1.6.0",
