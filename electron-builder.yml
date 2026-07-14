@@ -24,8 +24,14 @@ asarUnpack:
 # maps to process.resourcesPath/bin, which is exactly the packaged path that
 # resolveBinaryPath() in src/main/gateway.ts looks the binary up at. Build the
 # binary first via the build:gateway:<os> scripts so this directory exists.
+#
+# build-gateway.sh writes to resources/bin/<arch>/ (arm64 or x64). The ${arch} macro
+# expands per build pass, so a single `electron-builder --mac --arm64 --x64` picks the
+# matching per-arch binary while emitting one combined latest-mac.yml. Both mac arches
+# ship in one pass and share one auto-update feed. It flattens to <resources>/bin, so
+# resolveBinaryPath()'s packaged branch is unchanged.
 extraResources:
-  - from: resources/bin
+  - from: resources/bin/${arch}
     to: bin
 win:
   executableName: Optaris

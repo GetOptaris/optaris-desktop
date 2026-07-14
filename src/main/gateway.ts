@@ -74,11 +74,13 @@ export class GatewayManager {
   /** Resolve the sidecar binary path for dev vs packaged. */
   private resolveBinaryPath(): string {
     const binName = process.platform === 'win32' ? 'optaris-gateway.exe' : 'optaris-gateway'
-    // In dev, app.getAppPath() is the project root (where package.json lives), so
-    // the freshly-built binary sits at <root>/resources/bin. When packaged it is
-    // shipped via electron-builder extraResources into <resources>/bin.
+    // In dev, app.getAppPath() is the project root (where package.json lives), and
+    // build-gateway.sh writes into <root>/resources/bin/<arch> — so we append the
+    // host arch (process.arch is electron-builder's naming: arm64 / x64). When
+    // packaged, electron-builder's extraResources flattens the matching per-arch dir
+    // into <resources>/bin, so no arch segment is needed there.
     const baseDir = is.dev
-      ? join(app.getAppPath(), 'resources', 'bin')
+      ? join(app.getAppPath(), 'resources', 'bin', process.arch)
       : join(process.resourcesPath, 'bin')
     return join(baseDir, binName)
   }

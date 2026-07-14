@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -164,30 +164,44 @@ function AppearanceCard(): React.JSX.Element {
   )
 }
 
+/** Inline feedback for a *manual* check: nothing shown, "up to date", or "check failed". */
+type CheckNote = 'none' | 'upToDate' | 'error'
+
 /**
- * Version + manual update check. The available/downloaded/error toasts are owned by
- * UpdateNotifier (mounted app-wide); here we only end the "checking" state and, on a
- * manual check that finds nothing, show an inline "up to date" note (UpdateNotifier
- * deliberately stays silent on `update-not-available` so the startup check doesn't nag).
+ * Version + manual update check. The available/downloaded toasts are owned by
+ * UpdateNotifier (mounted app-wide); here we end the "checking" state and, for a check
+ * the user started from this button, show an inline result: "up to date" when nothing
+ * is available or "check failed" on error. Both UpdateNotifier and this card stay
+ * silent on the automatic startup check — the manual flag below gates the inline note,
+ * so the background `update-not-available` / `error` never surfaces "up to date" or an
+ * error the user didn't ask for.
  */
 function AboutCard(): React.JSX.Element {
   const t = useT()
   const [version, setVersion] = useState('')
   const [checking, setChecking] = useState(false)
-  const [upToDate, setUpToDate] = useState(false)
+  const [note, setNote] = useState<CheckNote>('none')
+  // True only while a check the user started from this button is in flight. A ref (not
+  // state) so the push handlers below read the current value without re-subscribing.
+  const manualCheck = useRef(false)
 
   useEffect(() => {
     void window.api.updater.getVersion().then(setVersion)
   }, [])
 
-  // Any check outcome ends the spinner; a "not available" also drives the inline note.
+  // Any check outcome ends the spinner. The inline note is driven only for a manual
+  // check (the startup check must not nag): "available" clears the note (the toast
+  // takes over), "not available" -> up to date, "error" -> failed.
   useEffect(() => {
-    const offAvailable = window.api.updater.onUpdateAvailable(() => setChecking(false))
-    const offNone = window.api.updater.onUpdateNotAvailable(() => {
+    const finishManual = (result: CheckNote): void => {
+      if (!manualCheck.current) return
+      manualCheck.current = false
       setChecking(false)
-      setUpToDate(true)
-    })
-    const offError = window.api.updater.onError(() => setChecking(false))
+      setNote(result)
+    }
+    const offAvailable = window.api.updater.onUpdateAvailable(() => finishManual('none'))
+    const offNone = window.api.updater.onUpdateNotAvailable(() => finishManual('upToDate'))
+    const offError = window.api.updater.onError(() => finishManual('error'))
     return () => {
       offAvailable()
       offNone()
@@ -196,7 +210,8 @@ function AboutCard(): React.JSX.Element {
   }, [])
 
   const onCheck = async (): Promise<void> => {
-    setUpToDate(false)
+    manualCheck.current = true
+    setNote('none')
     setChecking(true)
     await window.api.updater.checkForUpdates()
   }
@@ -212,8 +227,10 @@ function AboutCard(): React.JSX.Element {
           <span className="text-sm">
             {t('settings.version')} {version || '—'}
           </span>
-          {upToDate ? (
+          {note === 'upToDate' ? (
             <p className="text-xs text-muted-foreground">{t('update.upToDate')}</p>
+          ) : note === 'error' ? (
+            <p className="text-xs text-destructive">{t('update.error')}</p>
           ) : null}
         </div>
         <Button type="button" variant="outline" size="sm" onClick={onCheck} disabled={checking}>
