@@ -150,6 +150,10 @@ function ClientRow({
 }): React.JSX.Element {
   const { tone, line } = describe(t, status)
   const name = t(`connect.clients.${status.id}`)
+  // A client can only be connected once it's both supported on this OS and detected on
+  // disk — otherwise applying would silently create config dirs for an app that isn't
+  // there. In those cases show a disabled button labelled with the reason.
+  const unavailable = !status.supported ? 'unsupported' : !status.detected ? 'notInstalled' : null
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border p-3">
@@ -170,12 +174,16 @@ function ClientRow({
       <Button
         type="button"
         size="sm"
-        variant={status.connected ? 'outline' : 'default'}
+        variant={unavailable ? 'outline' : status.connected ? 'outline' : 'default'}
         onClick={onApply}
-        disabled={!status.supported || applying}
+        disabled={unavailable !== null || applying}
       >
         {applying ? (
           <RefreshCwIcon className="size-4 animate-spin" />
+        ) : unavailable === 'notInstalled' ? (
+          t('connect.notInstalled')
+        ) : unavailable === 'unsupported' ? (
+          t('connect.unsupported')
         ) : status.connected ? (
           t('connect.reapply')
         ) : (
