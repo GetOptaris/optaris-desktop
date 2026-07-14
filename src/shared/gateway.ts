@@ -222,6 +222,21 @@ export interface ApplyClientResult {
   message?: string
 }
 
+/**
+ * Result of regenerateApiKey: the new key (for the dashboard to display) plus the ids of
+ * the clients that were re-applied with it, and the ids that could not be. Regenerating
+ * rotates the admission key, which would otherwise 401 every connected client until it's
+ * manually re-applied; the main process re-writes the new key into each client that was
+ * pointed here. `reapplied` are the ones that succeeded; `failed` are ones that were pointed
+ * here but couldn't be re-written (so they still hold the stale key and need a manual
+ * re-connect). The key is rotated regardless — a re-apply failure never undoes that.
+ */
+export interface RegenerateApiKeyResult {
+  key: string
+  reapplied: ClientId[]
+  failed: ClientId[]
+}
+
 /** The gateway control-plane surface exposed on `window.api.gateway`. */
 export interface GatewayApi {
   /** Base URL clients point their base_url at (http://127.0.0.1:<port>). */
@@ -234,8 +249,13 @@ export interface GatewayApi {
   queryLogs: (params?: LogQuery) => Promise<LogRow[]>
   /** Read one request's raw capture (client/upstream headers+bodies). Null when none was recorded. */
   queryTrace: (params: TraceQuery) => Promise<TraceRecord | null>
-  /** Replace the gateway's client-facing API key and return the new value. */
-  regenerateApiKey: () => Promise<string>
+  /**
+   * Replace the gateway's client-facing API key. Returns the new value plus the ids of the
+   * clients that were re-applied with it and the ids that couldn't be (connected clients are
+   * re-pointed automatically so they don't 401 on the rotated key; any that fail are reported
+   * so the user can re-connect them manually).
+   */
+  regenerateApiKey: () => Promise<RegenerateApiKeyResult>
   /** List each auto-configurable client, its current base URL, and whether it points here. */
   listClients: () => Promise<ClientStatus[]>
   /** Point a client at this gateway by writing its config file(s). */

@@ -24,6 +24,8 @@ const zh: Dict = {
     copyFailed: '复制失败',
     apiKeyCopied: 'API Key 已复制',
     apiKeyRegenerated: '已生成新的 API Key',
+    apiKeyRegeneratedReapplied: '已生成新 Key 并重新接入 {count} 个客户端',
+    apiKeyRegeneratedPartial: '已生成新 Key,但未能重新接入 {clients},请手动重新连接',
     apiKeyRegenerateFailed: '生成新 API Key 失败'
   },
   dashboard: {
@@ -35,13 +37,15 @@ const zh: Dict = {
     apiKeyReveal: '显示 API Key',
     apiKeyHide: '隐藏 API Key',
     apiKeyRegenerate: '重新生成',
-    apiKeyRegenerateConfirm: '确定重新生成？现有客户端在更新之前将无法使用。',
+    apiKeyRegenerateConfirm:
+      '确定重新生成？将同时把新 Key 重新接入当前已连的客户端（部分需重启后生效）。',
     apiKeyRegenerateCancel: '取消',
     overviewTitle: '概览',
     channelsCount: '渠道',
     groupsCount: '分组',
     defaultGroup: '激活分组',
     quickStartTitle: '快速上手',
+    quickStartToggle: '展开或折叠快速上手',
     step1Title: '添加渠道',
     step1Desc: '登记一个上游供应商，填写 base URL、API Key 和模型。',
     step2Title: '创建分组',
@@ -49,9 +53,10 @@ const zh: Dict = {
     step3Title: '指向客户端',
     step3Desc: '把客户端的 base URL 设为上方的网关地址。',
     step4Title: '查看日志',
-    step4Desc: '在日志页查看请求记录；可在「设置」中开启抓取请求与响应正文。',
+    step4Desc: '在日志页查看请求记录。',
     goChannels: '前往渠道',
     goGroups: '前往分组',
+    goConnect: '前往接入',
     goLogs: '前往日志'
   },
   connect: {

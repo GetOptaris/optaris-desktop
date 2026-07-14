@@ -419,6 +419,29 @@ export async function listClients(gateway: GatewayManager): Promise<ClientStatus
 }
 
 /**
+ * Re-point every client that currently targets this gateway at it again, so a freshly
+ * rotated admission key is written back into their config files. Callers rotate the key
+ * first (it's persisted to disk); each applyClient then reads that new key via
+ * ensureGatewayApiKey. Returns the ids that were re-applied successfully and the ids that
+ * failed (they still hold the stale key and need a manual re-connect). One broken client is
+ * recorded and skipped rather than aborting the rest — applyClient never throws.
+ */
+export async function reapplyConnectedClients(
+  gateway: GatewayManager
+): Promise<{ reapplied: ClientId[]; failed: ClientId[] }> {
+  const statuses = await listClients(gateway)
+  const connected = statuses.filter((s) => s.connected).map((s) => s.id)
+  const reapplied: ClientId[] = []
+  const failed: ClientId[] = []
+  for (const id of connected) {
+    const res = await applyClient(gateway, id)
+    if (res.ok) reapplied.push(id)
+    else failed.push(id)
+  }
+  return { reapplied, failed }
+}
+
+/**
  * Point one client at this gateway by writing its config file(s). Resolves the gateway URL
  * and ensures a non-empty admission key exists (generating+persisting one if the gateway
  * was running open), then read-merge-writes. Returns an ok flag + written paths rather than

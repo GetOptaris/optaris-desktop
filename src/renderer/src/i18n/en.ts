@@ -26,6 +26,9 @@ const en = {
     copyFailed: 'Copy failed',
     apiKeyCopied: 'API key copied',
     apiKeyRegenerated: 'New API key generated',
+    apiKeyRegeneratedReapplied: 'New key generated and re-applied to {count} client(s)',
+    apiKeyRegeneratedPartial:
+      'New key generated, but couldn’t re-connect {clients} — re-connect manually',
     apiKeyRegenerateFailed: 'Failed to generate a new API key'
   },
   dashboard: {
@@ -38,13 +41,14 @@ const en = {
     apiKeyHide: 'Hide API key',
     apiKeyRegenerate: 'Regenerate',
     apiKeyRegenerateConfirm:
-      'Regenerate the key? Existing clients will stop working until updated.',
+      'Regenerate the key? Connected clients will be re-applied automatically (some need a restart to take effect).',
     apiKeyRegenerateCancel: 'Cancel',
     overviewTitle: 'Overview',
     channelsCount: 'Channels',
     groupsCount: 'Groups',
     defaultGroup: 'Active group',
     quickStartTitle: 'Quick start',
+    quickStartToggle: 'Toggle quick start',
     step1Title: 'Add a channel',
     step1Desc: 'Register an upstream provider with its base URL, API key and models.',
     step2Title: 'Create a group',
@@ -52,10 +56,10 @@ const en = {
     step3Title: 'Point your client',
     step3Desc: 'Set your client’s base URL to the gateway address above.',
     step4Title: 'View logs',
-    step4Desc:
-      'Inspect request records on the Logs page; enable request/response capture in Settings.',
+    step4Desc: 'Inspect request records on the Logs page.',
     goChannels: 'Go to Channels',
     goGroups: 'Go to Groups',
+    goConnect: 'Go to Connect',
     goLogs: 'Go to Logs'
   },
   connect: {

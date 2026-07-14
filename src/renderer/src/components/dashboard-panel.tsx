@@ -1,6 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { CheckIcon, CopyIcon, EyeIcon, EyeOffIcon, RefreshCwIcon } from 'lucide-react'
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  CopyIcon,
+  EyeIcon,
+  EyeOffIcon,
+  RefreshCwIcon
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -27,11 +35,15 @@ export function DashboardPanel({
   const t = useT()
   const defaultGroup = draft.groups.find((g) => g.id === draft.default_group_id)
 
+  // Quick-start step 3 offers a shortcut down to the one-click connect section (a sibling
+  // card in the same scroll container), so the user doesn't have to know to scroll for it.
+  const connectRef = useRef<HTMLDivElement>(null)
+  const scrollToConnect = (): void =>
+    connectRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+
   return (
     <div className="flex flex-col gap-4">
-      <GatewayCard t={t} apiKey={draft.gateway_api_key} onRegenerate={onRegenerateApiKey} />
-
-      <ConnectClientsCard />
+      <QuickStartCard t={t} onNavigate={onNavigate} onScrollToConnect={scrollToConnect} />
 
       <Card>
         <CardHeader>
@@ -50,10 +62,69 @@ export function DashboardPanel({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
+      <div ref={connectRef}>
+        <ConnectClientsCard />
+      </div>
+
+      <GatewayCard t={t} apiKey={draft.gateway_api_key} onRegenerate={onRegenerateApiKey} />
+    </div>
+  )
+}
+
+/** The collapsible quick-start guide. Collapse state persists in localStorage. */
+const QUICK_START_STORAGE_KEY = 'optaris.dashboard.quickStartCollapsed'
+
+/** Read the persisted collapse state; anything but the literal 'true' means expanded. */
+function readQuickStartCollapsed(): boolean {
+  try {
+    return localStorage.getItem(QUICK_START_STORAGE_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function QuickStartCard({
+  t,
+  onNavigate,
+  onScrollToConnect
+}: {
+  t: (key: string) => string
+  onNavigate: (tab: NavigableTab) => void
+  onScrollToConnect: () => void
+}): React.JSX.Element {
+  const [collapsed, setCollapsed] = useState(readQuickStartCollapsed)
+
+  const toggle = (): void => {
+    setCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem(QUICK_START_STORAGE_KEY, String(next))
+      } catch {
+        /* persistence is best-effort */
+      }
+      return next
+    })
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={!collapsed}
+          aria-label={t('dashboard.quickStartToggle')}
+          className="flex w-full items-center justify-between gap-2 text-left"
+        >
           <CardTitle>{t('dashboard.quickStartTitle')}</CardTitle>
-        </CardHeader>
+          {collapsed ? (
+            <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
+          )}
+        </button>
+      </CardHeader>
+      {collapsed ? null : (
         <CardContent className="grid gap-4">
           <Step
             n={1}
@@ -67,7 +138,12 @@ export function DashboardPanel({
             desc={t('dashboard.step2Desc')}
             action={{ label: t('dashboard.goGroups'), onClick: () => onNavigate('groups') }}
           />
-          <Step n={3} title={t('dashboard.step3Title')} desc={t('dashboard.step3Desc')} />
+          <Step
+            n={3}
+            title={t('dashboard.step3Title')}
+            desc={t('dashboard.step3Desc')}
+            action={{ label: t('dashboard.goConnect'), onClick: onScrollToConnect }}
+          />
           <Step
             n={4}
             title={t('dashboard.step4Title')}
@@ -75,8 +151,8 @@ export function DashboardPanel({
             action={{ label: t('dashboard.goLogs'), onClick: () => onNavigate('logs') }}
           />
         </CardContent>
-      </Card>
-    </div>
+      )}
+    </Card>
   )
 }
 
@@ -90,7 +166,7 @@ function GatewayCard({
   apiKey,
   onRegenerate: onRegenerateKey
 }: {
-  t: (key: string) => string
+  t: (key: string, vars?: Record<string, string | number>) => string
   apiKey: string
   onRegenerate: (key: string) => void
 }): React.JSX.Element {
@@ -148,10 +224,19 @@ function GatewayCard({
   const onRegenerate = async (): Promise<void> => {
     setRegenerating(true)
     try {
-      const next = await window.api.gateway.regenerateApiKey()
+      const { key: next, reapplied, failed } = await window.api.gateway.regenerateApiKey()
       onRegenerateKey(next)
       setRevealed(true)
-      toast.success(t('toast.apiKeyRegenerated'))
+      if (failed.length > 0) {
+        // Some connected clients still hold the stale key — name them so the user can
+        // re-connect those by hand (the rest were re-applied automatically).
+        const clients = failed.map((id) => t(`connect.clients.${id}`)).join(', ')
+        toast.warning(t('toast.apiKeyRegeneratedPartial', { clients }))
+      } else if (reapplied.length > 0) {
+        toast.success(t('toast.apiKeyRegeneratedReapplied', { count: reapplied.length }))
+      } else {
+        toast.success(t('toast.apiKeyRegenerated'))
+      }
     } catch {
       toast.error(t('toast.apiKeyRegenerateFailed'))
     } finally {
