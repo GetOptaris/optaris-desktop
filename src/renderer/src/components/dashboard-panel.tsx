@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { CheckIcon, CopyIcon, EyeIcon, EyeOffIcon, RefreshCwIcon } from 'lucide-react'
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  CopyIcon,
+  EyeIcon,
+  EyeOffIcon,
+  RefreshCwIcon
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -27,11 +35,13 @@ export function DashboardPanel({
   const t = useT()
   const defaultGroup = draft.groups.find((g) => g.id === draft.default_group_id)
 
+  // Bumped when the Gateway card rotates the key and re-applies it to connected clients, so
+  // the (sibling) ConnectClientsCard re-fetches and shows the new wiring.
+  const [reconnectNonce, setReconnectNonce] = useState(0)
+
   return (
     <div className="flex flex-col gap-4">
-      <GatewayCard t={t} apiKey={draft.gateway_api_key} onRegenerate={onRegenerateApiKey} />
-
-      <ConnectClientsCard />
+      <QuickStartCard t={t} onNavigate={onNavigate} />
 
       <Card>
         <CardHeader>
@@ -50,10 +60,70 @@ export function DashboardPanel({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
+      <ConnectClientsCard refreshSignal={reconnectNonce} />
+
+      <GatewayCard
+        t={t}
+        apiKey={draft.gateway_api_key}
+        onRegenerate={onRegenerateApiKey}
+        onReapplied={() => setReconnectNonce((n) => n + 1)}
+      />
+    </div>
+  )
+}
+
+/** The collapsible quick-start guide. Collapse state persists in localStorage. */
+const QUICK_START_STORAGE_KEY = 'optaris.dashboard.quickStartCollapsed'
+
+/** Read the persisted collapse state; anything but the literal 'true' means expanded. */
+function readQuickStartCollapsed(): boolean {
+  try {
+    return localStorage.getItem(QUICK_START_STORAGE_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function QuickStartCard({
+  t,
+  onNavigate
+}: {
+  t: (key: string) => string
+  onNavigate: (tab: NavigableTab) => void
+}): React.JSX.Element {
+  const [collapsed, setCollapsed] = useState(readQuickStartCollapsed)
+
+  const toggle = (): void => {
+    setCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem(QUICK_START_STORAGE_KEY, String(next))
+      } catch {
+        /* persistence is best-effort */
+      }
+      return next
+    })
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={!collapsed}
+          aria-label={t('dashboard.quickStartToggle')}
+          className="flex w-full items-center justify-between gap-2 text-left"
+        >
           <CardTitle>{t('dashboard.quickStartTitle')}</CardTitle>
-        </CardHeader>
+          {collapsed ? (
+            <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
+          )}
+        </button>
+      </CardHeader>
+      {collapsed ? null : (
         <CardContent className="grid gap-4">
           <Step
             n={1}
@@ -75,8 +145,8 @@ export function DashboardPanel({
             action={{ label: t('dashboard.goLogs'), onClick: () => onNavigate('logs') }}
           />
         </CardContent>
-      </Card>
-    </div>
+      )}
+    </Card>
   )
 }
 
@@ -88,11 +158,14 @@ function maskKey(key: string): string {
 function GatewayCard({
   t,
   apiKey,
-  onRegenerate: onRegenerateKey
+  onRegenerate: onRegenerateKey,
+  onReapplied
 }: {
-  t: (key: string) => string
+  t: (key: string, vars?: Record<string, string | number>) => string
   apiKey: string
   onRegenerate: (key: string) => void
+  /** Called after a regenerate re-applies the new key, so siblings can refresh. */
+  onReapplied: () => void
 }): React.JSX.Element {
   const [baseUrl, setBaseUrl] = useState('')
   const [copied, setCopied] = useState(false)
@@ -148,10 +221,15 @@ function GatewayCard({
   const onRegenerate = async (): Promise<void> => {
     setRegenerating(true)
     try {
-      const next = await window.api.gateway.regenerateApiKey()
+      const { key: next, reapplied } = await window.api.gateway.regenerateApiKey()
       onRegenerateKey(next)
       setRevealed(true)
-      toast.success(t('toast.apiKeyRegenerated'))
+      if (reapplied.length > 0) {
+        onReapplied()
+        toast.success(t('toast.apiKeyRegeneratedReapplied', { count: reapplied.length }))
+      } else {
+        toast.success(t('toast.apiKeyRegenerated'))
+      }
     } catch {
       toast.error(t('toast.apiKeyRegenerateFailed'))
     } finally {

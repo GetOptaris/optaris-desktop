@@ -8,6 +8,7 @@ import type {
   DisplayConfig,
   LogQuery,
   LogRow,
+  RegenerateApiKeyResult,
   TraceQuery,
   TraceRecord
 } from '../shared/gateway'
@@ -20,7 +21,7 @@ import {
   validateConfigInput,
   writeConfig
 } from './config'
-import { applyClient, listClients } from './clients'
+import { applyClient, listClients, reapplyConnectedClients } from './clients'
 import { queryLogs } from './logs'
 import { queryTrace } from './trace'
 
@@ -65,8 +66,15 @@ export function registerGatewayIpc(gateway: GatewayManager): void {
   )
 
   // Regenerate the single client-facing gateway API key and return the new value so the
-  // dashboard can show it. The sidecar hot-reloads it on its own via mtime polling.
-  ipcMain.handle(GATEWAY_IPC.regenerateApiKey, (): Promise<string> => regenerateGatewayApiKey())
+  // dashboard can show it. The sidecar hot-reloads it on its own via mtime polling. Rotating
+  // the key would 401 every connected client, so we re-apply the new key into each client
+  // still pointed here (report which back for the toast). Re-apply runs after the key is
+  // persisted, so applyClient's ensureGatewayApiKey reads the fresh value.
+  ipcMain.handle(GATEWAY_IPC.regenerateApiKey, async (): Promise<RegenerateApiKeyResult> => {
+    const key = await regenerateGatewayApiKey()
+    const reapplied = await reapplyConnectedClients(gateway)
+    return { key, reapplied }
+  })
 
   // Report each auto-configurable client's current wiring (installed / base URL / connected)
   // for the dashboard's "Connect your clients" card.

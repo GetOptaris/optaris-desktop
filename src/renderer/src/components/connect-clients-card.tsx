@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { RefreshCwIcon, ServerIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -16,7 +16,16 @@ const ORDER: ClientId[] = ['claude_code', 'claude_desktop', 'codex', 'gemini_cli
  * Status is tri-state: muted when not installed / unsupported, amber when installed but not
  * yet pointed here, green once connected.
  */
-export function ConnectClientsCard(): React.JSX.Element {
+export function ConnectClientsCard({
+  refreshSignal
+}: {
+  /**
+   * Bump this to force a re-fetch of client statuses from outside the card — e.g. after the
+   * Gateway card rotates the key and re-applies it to connected clients, so their rows
+   * reflect the new wiring without the user clicking Refresh.
+   */
+  refreshSignal?: number
+} = {}): React.JSX.Element {
   const t = useT()
   const [statuses, setStatuses] = useState<ClientStatus[] | null>(null)
   const [applyingId, setApplyingId] = useState<ClientId | null>(null)
@@ -48,6 +57,17 @@ export function ConnectClientsCard(): React.JSX.Element {
       active = false
     }
   }, [])
+
+  // Re-fetch when an external actor (the Gateway card's regenerate) signals a change. Skip
+  // the initial mount — the effect above already does the first load.
+  const mounted = useRef(false)
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true
+      return
+    }
+    void refresh()
+  }, [refreshSignal, refresh])
 
   const onApply = useCallback(
     async (id: ClientId): Promise<void> => {
