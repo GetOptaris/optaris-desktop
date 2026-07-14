@@ -29,32 +29,32 @@ jobs:
       # (gateway/go.mod: replace => ../../optaris-core). Lay both repos out side by side
       # under the workspace so `go build` resolves the local module.
       - name: Checkout optaris-desktop
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: optaris-desktop
 
       - name: Checkout optaris-core
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: GetOptaris/optaris-core
           ref: main
           path: optaris-core
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: '1.26'
           cache-dependency-path: optaris-desktop/gateway/go.sum
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 10
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
           cache-dependency-path: optaris-desktop/pnpm-lock.yaml
 
