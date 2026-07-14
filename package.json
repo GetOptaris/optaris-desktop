@@ -37,7 +37,7 @@
     "build:mac": "npm run build:gateway:mac && electron-vite build && electron-builder --mac --arm64 --x64",
     "build:linux": "npm run build:gateway:linux && electron-vite build && electron-builder --linux",
     "build:mac:publish": "npm run build:gateway:mac && electron-vite build && electron-builder --mac --arm64 --x64 -p always",
-    "build:win:publish": "npm run build:gateway:win && npm run build && electron-builder --win -p always",
+    "build:win:publish": "npm run build:gateway:win && electron-vite build && electron-builder --win -p always",
     "build:linux:publish": "npm run build:gateway:linux && electron-vite build && electron-builder --linux -p always",
     "deploy:mac": "bash scripts/deploy-mac.sh",
     "gen:runtime-icon": "sips -s format png --resampleWidth 512 build/icon.svg --out resources/icon.png"
