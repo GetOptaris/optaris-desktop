@@ -58,6 +58,27 @@ const en = {
     goGroups: 'Go to Groups',
     goLogs: 'Go to Logs'
   },
+  connect: {
+    title: 'Connect your clients',
+    description: 'Point these apps at the local gateway in one click.',
+    apply: 'Connect',
+    reapply: 'Re-apply',
+    connected: 'Connected',
+    notConnected: 'Not connected',
+    notInstalled: 'Not installed',
+    currentAddress: 'Current address',
+    unsupported: 'Not supported on this OS',
+    restartHint: 'Restart the client to take effect.',
+    experimental: 'Experimental',
+    applied: '{client} connected — restart it to take effect',
+    applyFailed: 'Failed to connect {client}',
+    clients: {
+      claude_code: 'Claude Code',
+      claude_desktop: 'Claude Desktop',
+      codex: 'Codex',
+      gemini_cli: 'Gemini CLI'
+    }
+  },
   channels: {
     description: 'Upstream providers the gateway can route to.',
     add: 'Add channel',

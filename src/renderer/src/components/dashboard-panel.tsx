@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { cn } from '@/lib/utils'
 import { copyText } from '@/lib/clipboard'
 import { useT } from '@/i18n'
+import { ConnectClientsCard } from '@/components/connect-clients-card'
 import type { ConfigDraft } from '@/hooks/useGatewayConfig'
 
 /** Tabs the quick-start steps can jump to (kept in sync with App's Tab union). */
@@ -29,6 +30,8 @@ export function DashboardPanel({
   return (
     <div className="flex flex-col gap-4">
       <GatewayCard t={t} apiKey={draft.gateway_api_key} onRegenerate={onRegenerateApiKey} />
+
+      <ConnectClientsCard />
 
       <Card>
         <CardHeader>

@@ -54,6 +54,27 @@ const zh: Dict = {
     goGroups: '前往分组',
     goLogs: '前往日志'
   },
+  connect: {
+    title: '接入客户端',
+    description: '一键把这些应用指向本地网关。',
+    apply: '接入',
+    reapply: '重新接入',
+    connected: '已接入',
+    notConnected: '未接入',
+    notInstalled: '未安装',
+    currentAddress: '当前地址',
+    unsupported: '当前系统不支持',
+    restartHint: '需重启客户端后生效。',
+    experimental: '实验性',
+    applied: '{client} 已接入 — 重启后生效',
+    applyFailed: '接入 {client} 失败',
+    clients: {
+      claude_code: 'Claude Code',
+      claude_desktop: 'Claude Desktop',
+      codex: 'Codex',
+      gemini_cli: 'Gemini CLI'
+    }
+  },
   channels: {
     description: '网关可路由到的上游供应商。',
     add: '添加渠道',

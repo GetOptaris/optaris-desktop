@@ -1,6 +1,9 @@
 import { ipcMain } from 'electron'
 import { GATEWAY_IPC } from '../shared/gateway'
 import type {
+  ApplyClientResult,
+  ClientId,
+  ClientStatus,
   ConfigInput,
   DisplayConfig,
   LogQuery,
@@ -17,6 +20,7 @@ import {
   validateConfigInput,
   writeConfig
 } from './config'
+import { applyClient, listClients } from './clients'
 import { queryLogs } from './logs'
 import { queryTrace } from './trace'
 
@@ -63,4 +67,13 @@ export function registerGatewayIpc(gateway: GatewayManager): void {
   // Regenerate the single client-facing gateway API key and return the new value so the
   // dashboard can show it. The sidecar hot-reloads it on its own via mtime polling.
   ipcMain.handle(GATEWAY_IPC.regenerateApiKey, (): Promise<string> => regenerateGatewayApiKey())
+
+  // Report each auto-configurable client's current wiring (installed / base URL / connected)
+  // for the dashboard's "Connect your clients" card.
+  ipcMain.handle(GATEWAY_IPC.listClients, (): Promise<ClientStatus[]> => listClients(gateway))
+
+  // Write the gateway address + admission key into one client's config file(s).
+  ipcMain.handle(GATEWAY_IPC.applyClient, (_event, id: ClientId): Promise<ApplyClientResult> =>
+    applyClient(gateway, id)
+  )
 }
