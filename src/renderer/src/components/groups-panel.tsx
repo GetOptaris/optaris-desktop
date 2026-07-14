@@ -20,10 +20,8 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { useT, type TFunction } from '@/i18n'
+import { DEFAULT_GROUP_ID } from '../../../shared/gateway'
 import type { ChannelDraft, GroupDraft } from '@/hooks/useGatewayConfig'
-
-/** Sentinel for the "no active group" option (Select values must be non-empty). */
-const NO_GROUP = '__none__'
 
 interface GroupsPanelProps {
   groups: GroupDraft[]
@@ -46,13 +44,19 @@ export function GroupsPanel({
 }: GroupsPanelProps): React.JSX.Element {
   const t = useT()
 
+  // Display name for a group id: the built-in group is localized (its wire name is empty);
+  // user groups use their own name, falling back to a placeholder when unnamed.
+  const groupLabel = (g: GroupDraft): string =>
+    g.id === DEFAULT_GROUP_ID ? t('groups.defaultName') : g.name || t('groups.unnamed')
+
   // value→label map drives both the trigger (Base UI's `items`) and the options,
-  // keeping them from drifting — mirrors the capture-mode select in settings-panel.
+  // keeping them from drifting — mirrors the capture-mode select in settings-panel. The
+  // active group is never empty, so there is no "none" option: the built-in group is always
+  // present as the default choice.
   const groupItems = useMemo<Record<string, React.ReactNode>>(
-    () => ({
-      [NO_GROUP]: t('common.none'),
-      ...Object.fromEntries(groups.map((g) => [g.id, g.name || t('groups.unnamed')]))
-    }),
+    () => Object.fromEntries(groups.map((g) => [g.id, groupLabel(g)])),
+    // groupLabel closes over t; groups + t cover its inputs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [groups, t]
   )
 
@@ -73,8 +77,8 @@ export function GroupsPanel({
         </CardHeader>
         <CardContent className="grid gap-1.5">
           <Select
-            value={defaultGroupId || NO_GROUP}
-            onValueChange={(value) => onSetDefaultGroup(value && value !== NO_GROUP ? value : '')}
+            value={defaultGroupId || DEFAULT_GROUP_ID}
+            onValueChange={(value) => onSetDefaultGroup(value ?? DEFAULT_GROUP_ID)}
             items={groupItems}
           >
             <SelectTrigger className="w-full sm:w-72">
@@ -88,32 +92,19 @@ export function GroupsPanel({
               ))}
             </SelectContent>
           </Select>
-          {groups.length === 0 ? (
-            <p className="text-xs text-muted-foreground">{t('groups.activeEmpty')}</p>
-          ) : null}
         </CardContent>
       </Card>
 
-      {groups.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-12 text-center">
-          <p className="text-sm text-muted-foreground">{t('groups.empty')}</p>
-          <Button type="button" variant="outline" size="sm" onClick={onAdd}>
-            <PlusIcon className="size-4" />
-            {t('groups.addFirst')}
-          </Button>
-        </div>
-      ) : (
-        groups.map((g) => (
-          <GroupCard
-            key={g.id}
-            group={g}
-            channels={channels}
-            onUpdate={onUpdate}
-            onRemove={onRemove}
-            t={t}
-          />
-        ))
-      )}
+      {groups.map((g) => (
+        <GroupCard
+          key={g.id}
+          group={g}
+          channels={channels}
+          onUpdate={onUpdate}
+          onRemove={onRemove}
+          t={t}
+        />
+      ))}
     </div>
   )
 }
@@ -132,6 +123,9 @@ function GroupCard({
   t: TFunction
 }): React.JSX.Element {
   const { id } = group
+  // The built-in "all channels" group is read-only: it can't be renamed or deleted, and its
+  // membership always equals every channel (shown all-checked and disabled).
+  const isBuiltin = id === DEFAULT_GROUP_ID
 
   const toggleChannel = (channelId: string, checked: boolean): void => {
     const next = checked
@@ -143,32 +137,40 @@ function GroupCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="truncate">{group.name || t('groups.unnamed')}</CardTitle>
-        <CardAction>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-8 text-muted-foreground hover:text-destructive"
-            onClick={() => onRemove(id)}
-            aria-label={t('groups.delete')}
-            title={t('groups.delete')}
-          >
-            <Trash2Icon className="size-4" />
-          </Button>
-        </CardAction>
+        <CardTitle className="truncate">
+          {isBuiltin ? t('groups.defaultName') : group.name || t('groups.unnamed')}
+        </CardTitle>
+        {isBuiltin ? null : (
+          <CardAction>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8 text-muted-foreground hover:text-destructive"
+              onClick={() => onRemove(id)}
+              aria-label={t('groups.delete')}
+              title={t('groups.delete')}
+            >
+              <Trash2Icon className="size-4" />
+            </Button>
+          </CardAction>
+        )}
       </CardHeader>
 
       <CardContent className="grid gap-4">
-        <div className="grid gap-1.5">
-          <Label htmlFor={`${id}-name`}>{t('groups.name')}</Label>
-          <Input
-            id={`${id}-name`}
-            value={group.name}
-            onChange={(e) => onUpdate(id, { name: e.target.value })}
-            placeholder={t('groups.namePlaceholder')}
-          />
-        </div>
+        {isBuiltin ? (
+          <p className="text-sm text-muted-foreground">{t('groups.defaultDescription')}</p>
+        ) : (
+          <div className="grid gap-1.5">
+            <Label htmlFor={`${id}-name`}>{t('groups.name')}</Label>
+            <Input
+              id={`${id}-name`}
+              value={group.name}
+              onChange={(e) => onUpdate(id, { name: e.target.value })}
+              placeholder={t('groups.namePlaceholder')}
+            />
+          </div>
+        )}
 
         <div className="grid gap-2">
           <Label>{t('groups.channels')}</Label>
@@ -178,6 +180,9 @@ function GroupCard({
             <div className="grid gap-1 rounded-md border p-2 sm:grid-cols-2">
               {channels.map((c) => {
                 const checkboxId = `${id}-ch-${c.id}`
+                // The built-in group implicitly contains every channel; render all boxes
+                // checked and disabled rather than reading its (synthesized) channel_ids.
+                const checked = isBuiltin || group.channel_ids.includes(c.id)
                 return (
                   <label
                     key={c.id}
@@ -186,8 +191,9 @@ function GroupCard({
                   >
                     <Checkbox
                       id={checkboxId}
-                      checked={group.channel_ids.includes(c.id)}
-                      onCheckedChange={(checked) => toggleChannel(c.id, checked === true)}
+                      checked={checked}
+                      disabled={isBuiltin}
+                      onCheckedChange={(c2) => toggleChannel(c.id, c2 === true)}
                     />
                     <span className="truncate">{c.name || t('channels.unnamed')}</span>
                   </label>

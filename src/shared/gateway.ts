@@ -36,6 +36,15 @@ export interface DisplayChannel {
   updated_at?: string
 }
 
+/**
+ * A group as shown to the renderer.
+ *
+ * When `id === DEFAULT_GROUP_ID` this is the synthesized built-in group: it is NOT
+ * persisted to disk (the main process adds it in sanitizeConfig and strips it back out
+ * in mergeConfig), its members always equal every channel, and it is read-only in the UI
+ * (cannot be renamed, edited, or deleted). Its `name` is empty on the wire — the renderer
+ * localizes it via `t('groups.defaultName')`.
+ */
 export interface DisplayGroup {
   id: string
   name: string
@@ -263,8 +272,17 @@ export interface GatewayApi {
 }
 
 /**
+ * Id of the synthesized built-in "all channels" group. It is never persisted on disk:
+ * the main process injects it into the read shape (sanitizeConfig) with members equal to
+ * every channel, and strips it out of the write shape (mergeConfig) so it can never leak
+ * back into the config file. The gateway sidecar synthesizes the same group at load time
+ * under this exact id — keep it in sync with `builtinDefaultGroupID` in gateway/config.go.
+ */
+export const DEFAULT_GROUP_ID = 'grp_default'
+
+/**
  * IPC channel names. Kept here so preload (the caller) and main (the handler) can
- * never drift out of sync. This is the only runtime export of this module.
+ * never drift out of sync. These are the only runtime exports of this module.
  */
 export const GATEWAY_IPC = {
   getBaseUrl: 'gateway:get-base-url',
