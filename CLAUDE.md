@@ -34,7 +34,10 @@ pnpm typecheck          # runs BOTH projects: typecheck:node + typecheck:web
 pnpm build:gateway              # build sidecar for host platform into resources/bin/
 pnpm build:mac  / :win / :linux # full packaged builds (electron-builder)
 pnpm deploy:mac                 # local loop: build arm64 .app → install to /Applications → relaunch (unsigned)
+pnpm gen:runtime-icon           # regen resources/icon.png from build/icon.svg (runtime icon only)
 ```
+
+Icons are two separate artifacts: electron-builder rasterizes `build/icon.svg` at pack time (app/installer icons), while `resources/icon.png` is the runtime window icon — regenerate it with `pnpm gen:runtime-icon` after changing the SVG.
 
 Go sidecar tests (run from the `gateway/` dir so `go.work` applies):
 
@@ -43,7 +46,7 @@ go -C gateway test ./...
 go -C gateway test -run TestPresentedKey    # single test
 ```
 
-There is **no JS/TS test runner** configured — verification for the TypeScript side is `pnpm typecheck && pnpm lint`. TypeScript is split into two tsconfig projects: `tsconfig.node.json` (main + preload + shared) and `tsconfig.web.json` (renderer + shared). `shared/` is compiled by both, so it must stay isomorphic (type-only except the `GATEWAY_IPC` constants).
+There is **no JS/TS test runner** configured — verification for the TypeScript side is `pnpm typecheck && pnpm lint`. TypeScript is split into two tsconfig projects: `tsconfig.node.json` (main + preload + shared) and `tsconfig.web.json` (renderer + shared). `shared/` is compiled by both, so it must stay isomorphic (type-only except the `GATEWAY_IPC` and `UPDATER_IPC` channel constants).
 
 ## Architecture
 
@@ -57,8 +60,8 @@ renderer (React UI)  ──IPC──►  main (Electron)  ──spawn/--config/-
 - **`src/main`** — owns the plaintext config file, the sidecar process, and the SQLite/JSONL data dir. Sole authority over secrets.
 - **`src/preload`** — a thin `contextBridge` proxy exposing `window.api.gateway`; every method is just `ipcRenderer.invoke`.
 - **`src/renderer`** — React control-plane UI. Never reads the config file, spawns the sidecar, or touches the DB directly, and **never receives an upstream `api_key`**.
-- **`src/shared`** — the IPC wire contract (types + `GATEWAY_IPC` channel-name constants), shared by preload and main so they can't drift.
-- **`gateway`** — the Go sidecar (`main.go` HTTP/auth, `config.go` config load + hot-reload, `store.go` persistence).
+- **`src/shared`** — the IPC wire contracts (types + channel-name constants), shared by preload and main so they can't drift: `gateway.ts` (`GATEWAY_IPC`) and `updater.ts` (`UPDATER_IPC`).
+- **`gateway`** — the Go sidecar (`main.go` HTTP/auth, `config.go` config load + hot-reload, `store.go` persistence, `models.go` the `/v1/models` list endpoint).
 
 **The security invariant (touches config.ts, ipc.ts, shared/gateway.ts, useGatewayConfig.ts):** an upstream channel `api_key` lives only in the main process and the Go process. Reads return a `DisplayConfig` where each key is stripped to a `has_api_key` boolean + masked `api_key_preview`. Writes send a `ConfigInput` where `api_key` is optional: **empty/omitted means "keep the stored key"**, only a non-empty value overwrites (`mergeConfig`). The one exception is `gateway_api_key` — the gateway's _own_ client-facing admission key — which is passed to the renderer in full because the user must copy it into their clients. When adding a field that could carry a secret, note `sanitizeConfig` is a deliberate allow-list (explicit field copy, not omit-destructuring).
 
@@ -83,6 +86,18 @@ Config changes are **not signaled** — the main process just writes the file, a
 The Go sidecar is the **sole writer** of `optaris.db` (opened WAL mode) and the day-rolling `capture/YYYY-MM-DD.jsonl` files. It uses the **pure-Go `modernc.org/sqlite`** driver so builds stay `CGO_ENABLED=0` (static, cross-compilable) — do not swap in a cgo SQLite. Events flow through a buffered channel drained by a single goroutine (drops-and-counts on overflow; requests are never blocked for logging).
 
 The main process reads this data **read-only**: `logs.ts` uses `node:sqlite` (bundled with Electron's Node — no native module) to `SELECT` from the WAL DB concurrently; `trace.ts` scans the JSONL capture files by day since there's no index. When changing the `requests` table schema in `store.go`, update the `COLUMNS` list in `logs.ts` and the `LogRow` type in `shared/gateway.ts` to match.
+
+### Client auto-config: the second place secrets touch disk
+
+`src/main/clients.ts` one-click-configures external client apps (Claude Code `~/.claude`, Codex `~/.codex` via TOML, Gemini `~/.gemini`, Claude Desktop's app-support dir) to point their base URL + key at the local gateway. It is the **only module that writes outside Electron's `userData`**, reaching into the user's home dir — so it mirrors `config.ts`: every write is read-merge-write (unrelated keys preserved) + atomic (temp-file+rename, `0600`), because the files carry the gateway admission key and are treated as secrets. The per-client shape is dictated by the gateway's root-mounted routes — `/v1/messages` (Claude), `/v1/responses` + `/v1/chat/completions` (OpenAI/Codex, needs a `/v1` base), `/v1beta/models/…` (Gemini) — and the admission middleware accepts Bearer / `x-api-key` / `x-goog-api-key` / `?key=`.
+
+### App self-update
+
+`src/main/updater.ts` (+ the `src/shared/updater.ts` IPC contract and `update-notifier.tsx` in the renderer) wraps `electron-updater` against the GitHub Releases feed (provider derived from package.json `repository`). The model is **notify-on-discovery**: `autoDownload` is off, so a check only surfaces `update-available` and the renderer asks before downloading. **macOS is unsigned**, so we never call `downloadUpdate()` there (Squirrel.Mac would reject the signature) — the notification links out to the release page for a manual download; Windows/Linux download in-app.
+
+### Releasing
+
+Push a `v*` tag to trigger `.github/workflows/release.yml`: it creates one draft GitHub Release, then three OS jobs build and upload into it via the `build:mac:publish` / `build:win:publish` / `build:linux:publish` scripts (`electron-builder -p always`). **The tag must exactly match package.json `version`** (`v1.2.3` ↔ `1.2.3`) or CI fails before building. CI checks out `optaris-core` as a sibling automatically, satisfying the go.mod replace layout. Review the draft, then publish it manually.
 
 ## Renderer conventions
 
