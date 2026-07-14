@@ -126,6 +126,25 @@ function sameBaseUrl(a: string | null | undefined, b: string): boolean {
   return a.replace(/\/+$/, '') === b.replace(/\/+$/, '')
 }
 
+/**
+ * Best-effort fetch of the gateway's active-group model ids from GET /v1/models (OpenAI list
+ * shape). Returns [] on any error (gateway down, non-200, malformed body) so callers can treat
+ * "no models" and "couldn't reach the gateway" the same way.
+ */
+async function fetchGatewayModels(baseUrl: string, key: string): Promise<string[]> {
+  try {
+    const res = await fetch(`${baseUrl}/v1/models`, { headers: { Authorization: `Bearer ${key}` } })
+    if (!res.ok) return []
+    const data = asRecord(await res.json()).data
+    if (!Array.isArray(data)) return []
+    return data
+      .map((m) => asRecord(m).id)
+      .filter((id): id is string => typeof id === 'string' && id !== '')
+  } catch {
+    return []
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Claude Desktop: the enterprise "inference gateway" profile (macOS/Windows only).
 //
@@ -134,20 +153,17 @@ function sameBaseUrl(a: string | null | undefined, b: string): boolean {
 // library, register it in _meta.json as the applied profile, and flip both config files
 // to deploymentMode "3p". This is reverse-engineered and fragile (a Desktop update can
 // break it); it is surfaced in the UI as experimental.
+//
+// The advertised model list is seeded from the gateway's own /v1/models (the active group's
+// servable models) only when the profile has none yet — an existing list is preserved, so we
+// touch just the gateway wiring on re-connect. Desktop can also refresh models from /v1/models
+// itself via its "auto-read models" option.
 // ---------------------------------------------------------------------------
 
 const CD_PROFILE_ID = '6f707461-7269-4573-8000-000000000001'
 const CD_PROFILE_NAME = 'Optaris'
 const CD_CONFIG_FILE = 'claude_desktop_config.json'
 const CD_LIBRARY_DIR = 'configLibrary'
-
-/**
- * Claude-branded model ids advertised to Desktop. Desktop only accepts ids shaped like
- * `claude-…-{sonnet,opus,haiku,fable}-…`; whichever the user picks is routed by the
- * gateway's active group, so this is a best-effort default the user may align with their
- * channels.
- */
-const CD_MODELS = ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5']
 
 interface ClaudeDesktopPaths {
   normalConfig: string
@@ -184,14 +200,20 @@ async function applyClaudeDesktop(url: string, key: string): Promise<string[]> {
   if (!p) throw new Error('Claude Desktop auto-config is only supported on macOS and Windows')
   const written: string[] = []
 
-  const profile = {
-    coworkEgressAllowedHosts: ['*'],
-    disableDeploymentModeChooser: true,
-    inferenceGatewayApiKey: key,
-    inferenceGatewayAuthScheme: 'bearer',
-    inferenceGatewayBaseUrl: url,
-    inferenceProvider: 'gateway',
-    inferenceModels: CD_MODELS
+  // Read-merge the profile: overwrite only the gateway wiring, preserving any other keys
+  // (notably a user-set inferenceModels). Seed inferenceModels from the gateway's /v1/models
+  // only when none is set yet.
+  const profile = await readJsonStrict(p.profile)
+  profile.coworkEgressAllowedHosts = ['*']
+  profile.disableDeploymentModeChooser = true
+  profile.inferenceGatewayApiKey = key
+  profile.inferenceGatewayAuthScheme = 'bearer'
+  profile.inferenceGatewayBaseUrl = url
+  profile.inferenceProvider = 'gateway'
+  const existingModels = profile.inferenceModels
+  if (!Array.isArray(existingModels) || existingModels.length === 0) {
+    const models = await fetchGatewayModels(url, key)
+    if (models.length > 0) profile.inferenceModels = models
   }
   await writeFileAtomic(p.profile, JSON.stringify(profile, null, 2))
   written.push(p.profile)

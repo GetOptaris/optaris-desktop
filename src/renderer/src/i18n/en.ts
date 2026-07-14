@@ -63,6 +63,7 @@ const en = {
     description: 'Point these apps at the local gateway in one click.',
     apply: 'Connect',
     reapply: 'Re-apply',
+    refresh: 'Refresh',
     connected: 'Connected',
     notConnected: 'Not connected',
     notInstalled: 'Not installed',

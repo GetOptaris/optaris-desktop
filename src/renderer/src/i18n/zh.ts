@@ -59,6 +59,7 @@ const zh: Dict = {
     description: '一键把这些应用指向本地网关。',
     apply: '接入',
     reapply: '重新接入',
+    refresh: '刷新',
     connected: '已接入',
     notConnected: '未接入',
     notInstalled: '未安装',

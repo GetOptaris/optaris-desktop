@@ -20,13 +20,17 @@ export function ConnectClientsCard(): React.JSX.Element {
   const t = useT()
   const [statuses, setStatuses] = useState<ClientStatus[] | null>(null)
   const [applyingId, setApplyingId] = useState<ClientId | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
 
   const refresh = useCallback(async (): Promise<void> => {
+    setRefreshing(true)
     try {
       const next = await window.api.gateway.listClients()
       setStatuses(next)
     } catch {
       /* best-effort; leave the previous list (or the loading state) in place */
+    } finally {
+      setRefreshing(false)
     }
   }, [])
 
@@ -71,11 +75,26 @@ export function ConnectClientsCard(): React.JSX.Element {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <ServerIcon className="size-4" />
-          {t('connect.title')}
-        </CardTitle>
-        <CardDescription>{t('connect.description')}</CardDescription>
+        <div className="flex items-start justify-between gap-2">
+          <div className="grid gap-1.5">
+            <CardTitle className="flex items-center gap-2">
+              <ServerIcon className="size-4" />
+              {t('connect.title')}
+            </CardTitle>
+            <CardDescription>{t('connect.description')}</CardDescription>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={refresh}
+            disabled={refreshing}
+            aria-label={t('connect.refresh')}
+            title={t('connect.refresh')}
+          >
+            <RefreshCwIcon className={cn('size-4', refreshing && 'animate-spin')} />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="grid gap-2">
         {statuses === null ? (
@@ -118,12 +137,6 @@ const DOT: Record<'green' | 'amber' | 'muted', string> = {
   muted: 'bg-muted-foreground/40'
 }
 
-const TEXT: Record<'green' | 'amber' | 'muted', string> = {
-  green: 'text-emerald-600 dark:text-emerald-400',
-  amber: 'text-amber-600 dark:text-amber-400',
-  muted: 'text-muted-foreground'
-}
-
 function ClientRow({
   t,
   status,
@@ -151,7 +164,7 @@ function ClientRow({
               </span>
             ) : null}
           </div>
-          <div className={cn('truncate font-mono text-xs', TEXT[tone])}>{line}</div>
+          <div className="truncate font-mono text-xs text-muted-foreground">{line}</div>
         </div>
       </div>
       <Button
