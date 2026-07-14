@@ -28,7 +28,32 @@ Nothing leaves your computer except the upstream calls you configure, and your p
 - **Drop-in for four API formats.** Speaks OpenAI Chat Completions, OpenAI Responses, Anthropic Messages, and Gemini, so most clients work by changing only their base URL.
 - **Request logs & capture.** Every request is summarized (outcome, latency, token usage), with optional full capture for inspection — auth headers redacted.
 
-## Getting started
+## Download & install
+
+Grab the latest installer for your platform from the [Releases page](https://github.com/GetOptaris/optaris-desktop/releases).
+
+### macOS
+
+Optaris is **not yet notarized by Apple**, so downloaded builds are quarantined by Gatekeeper — this is a signing gap, not a broken download.
+
+1. Pick the DMG for your Mac: `Optaris-<version>-arm64.dmg` for Apple Silicon (M1/M2/M3…), `Optaris-<version>-x64.dmg` for Intel.
+2. Drag **Optaris** into your Applications folder.
+3. On first launch macOS says _"Optaris is damaged and can't be opened."_ Clear the quarantine flag once, then open the app normally:
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/Optaris.app
+   ```
+
+### Windows
+
+The build is unsigned, so SmartScreen may show _"Windows protected your PC."_ Click **More info → Run anyway**.
+
+### Linux
+
+- **AppImage** — `chmod +x Optaris-<version>.AppImage`, then run it. Self-updates.
+- **.deb** — `sudo dpkg -i optaris_<version>_amd64.deb`. Updated manually.
+
+## Build from source
 
 Optaris needs **Node.js (LTS) + [pnpm](https://pnpm.io/)** and **Go 1.26+**, plus [optaris-core](https://github.com/GetOptaris/optaris-core) checked out next to this repo (the gateway builds against it):
 
