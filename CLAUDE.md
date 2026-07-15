@@ -99,6 +99,8 @@ The main process reads this data **read-only**: `logs.ts` uses `node:sqlite` (bu
 
 Push a `v*` tag to trigger `.github/workflows/release.yml`: it creates one draft GitHub Release, then three OS jobs build and upload into it via the `build:mac:publish` / `build:win:publish` / `build:linux:publish` scripts (`electron-builder -p always`). **The tag must exactly match package.json `version`** (`v1.2.3` ↔ `1.2.3`) or CI fails before building. CI checks out `optaris-core` as a sibling automatically, satisfying the go.mod replace layout. Review the draft, then publish it manually.
 
+When the draft is published, `.github/workflows/update-cask.yml` fires automatically: it reads each macOS DMG's sha256 digest from the GitHub API (no download), renders `build/homebrew/optaris.rb.tmpl`, and pushes the result to `lmk123/homebrew-tap` as `Casks/optaris.rb`. This requires a fine-grained PAT with `Contents: Read and write` on `lmk123/homebrew-tap` stored as the `HOMEBREW_TAP_TOKEN` repository secret in this repo.
+
 ## Renderer conventions
 
 - **i18n:** UI strings live in `src/renderer/src/i18n/en.ts` **and** `zh.ts`, keyed by screen. Add every new string to **both** files (`zh.ts` is typed as `Dict = typeof en`, so a missing key is a type error) and read it via `const t = useT()` → `t('group.key')`. Language + theme are `localStorage` UI prefs (`optaris.locale`; theme via `next-themes`), **not** gateway config; both default to following the system.

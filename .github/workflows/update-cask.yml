@@ -1,0 +1,71 @@
+name: Update Homebrew Cask
+
+# Fires when a release is published (after you manually publish the draft).
+# Reads each DMG asset's sha256 digest directly from the GitHub API — no file
+# download needed — renders the cask template, and pushes it to the tap repo.
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-cask:
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout optaris-desktop
+        uses: actions/checkout@v4
+
+      # Strip the leading "v" from the tag (v1.2.3 → 1.2.3).
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # The GitHub Releases asset API includes a `digest` field (sha256:<hex>)
+      # for every uploaded asset — no download required.
+      - name: Fetch DMG sha256 digests
+        id: digests
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          ARM_DIGEST=$(gh api "repos/${{ github.repository }}/releases/tags/${TAG}" \
+            --jq '.assets[] | select(.name | endswith("-arm64.dmg")) | .digest' \
+            | sed 's/^sha256://')
+          X64_DIGEST=$(gh api "repos/${{ github.repository }}/releases/tags/${TAG}" \
+            --jq '.assets[] | select(.name | endswith("-x64.dmg")) | .digest' \
+            | sed 's/^sha256://')
+          if [ -z "$ARM_DIGEST" ] || [ -z "$X64_DIGEST" ]; then
+            echo "::error::Could not find DMG digest(s) for release ${TAG}"
+            exit 1
+          fi
+          echo "arm=${ARM_DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "x64=${X64_DIGEST}" >> "$GITHUB_OUTPUT"
+
+      # Render the cask template by substituting the three placeholders.
+      - name: Render cask from template
+        id: render
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA_ARM="${{ steps.digests.outputs.arm }}"
+          SHA_X64="${{ steps.digests.outputs.x64 }}"
+          sed \
+            -e "s/__VERSION__/${VERSION}/g" \
+            -e "s/__SHA256_ARM__/${SHA_ARM}/g" \
+            -e "s/__SHA256_X64__/${SHA_X64}/g" \
+            build/homebrew/optaris.rb.tmpl > /tmp/optaris.rb
+          echo "Rendered cask:"
+          cat /tmp/optaris.rb
+
+      # Check out the tap repo, copy the rendered cask, commit, and push.
+      - name: Push cask to tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/lmk123/homebrew-tap.git" tap
+          cp /tmp/optaris.rb tap/Casks/optaris.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/optaris.rb
+          git commit -m "chore: update optaris cask to v${{ steps.version.outputs.version }}"
+          git push
