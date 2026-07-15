@@ -1,5 +1,11 @@
+import { useState } from 'react'
+import { toast } from 'sonner'
+import { CheckIcon, CopyIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { JsonView } from '@/components/json-view'
+import { copyText } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
 import {
   clientLabel,
@@ -24,14 +30,17 @@ interface LogTraceDialogProps {
   onClose: () => void
 }
 
-/** Pretty-print a JSON body; fall back to the raw string (e.g. an SSE stream) when it isn't JSON. */
-function prettyBody(raw: string): string {
+/**
+ * Pretty-print a JSON body; fall back to the raw string (e.g. an SSE stream, or a body
+ * truncated to invalid JSON) when it isn't parseable. `isJson` drives the viewer's language.
+ */
+function formatBody(raw: string): { text: string; isJson: boolean } {
   const trimmed = raw.trim()
-  if (!trimmed) return ''
+  if (!trimmed) return { text: '', isJson: false }
   try {
-    return JSON.stringify(JSON.parse(trimmed), null, 2)
+    return { text: JSON.stringify(JSON.parse(trimmed), null, 2), isJson: true }
   } catch {
-    return raw
+    return { text: raw, isJson: false }
   }
 }
 
@@ -77,15 +86,42 @@ function HeadersTable({
   )
 }
 
+/** A copy-to-clipboard button pinned to the top-right of a body block. */
+function CopyButton({ text, t }: { text: string; t: TFunction }): React.JSX.Element {
+  const [copied, setCopied] = useState(false)
+  const onCopy = async (): Promise<void> => {
+    if (await copyText(text)) {
+      setCopied(true)
+      toast.success(t('toast.bodyCopied'))
+      window.setTimeout(() => setCopied(false), 1500)
+    } else {
+      toast.error(t('toast.copyFailed'))
+    }
+  }
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-xs"
+      onClick={onCopy}
+      aria-label={t('logs.detail.copyBody')}
+      className="absolute top-1.5 right-1.5 z-10 bg-background/70 text-muted-foreground backdrop-blur hover:text-foreground"
+    >
+      {copied ? <CheckIcon /> : <CopyIcon />}
+    </Button>
+  )
+}
+
 function BodyBlock({ body, t }: { body: string; t: TFunction }): React.JSX.Element {
-  const text = prettyBody(body)
+  const { text, isJson } = formatBody(body)
   if (!text) {
     return <p className="text-xs text-muted-foreground italic">{t('logs.detail.emptyBody')}</p>
   }
   return (
-    <pre className="max-h-80 overflow-auto rounded-md border bg-muted/40 p-2 font-mono text-xs whitespace-pre-wrap break-all">
-      {text}
-    </pre>
+    <div className="relative overflow-hidden rounded-md border bg-muted/40">
+      <CopyButton text={text} t={t} />
+      <JsonView value={text} language={isJson ? 'json' : 'text'} />
+    </div>
   )
 }
 
