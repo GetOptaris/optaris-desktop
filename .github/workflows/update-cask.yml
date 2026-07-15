@@ -7,6 +7,12 @@ on:
   release:
     types: [published]
 
+# Serialize cask pushes so two near-simultaneous releases can't race on
+# clone/commit/push to the tap repo (second push would fail non-fast-forward).
+concurrency:
+  group: update-cask
+  cancel-in-progress: false
+
 jobs:
   update-cask:
     if: ${{ !github.event.release.prerelease }}
