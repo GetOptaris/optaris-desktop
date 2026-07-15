@@ -34,9 +34,17 @@ Grab the latest installer for your platform from the [Releases page](https://git
 
 ### macOS
 
+**Recommended — Homebrew Cask** (handles the quarantine flag automatically):
+
+```bash
+brew install --cask lmk123/tap/optaris
+```
+
+**Manual DMG install**
+
 Optaris is **not yet notarized by Apple**, so downloaded builds are quarantined by Gatekeeper — this is a signing gap, not a broken download.
 
-1. Pick the DMG for your Mac: `Optaris-<version>-arm64.dmg` for Apple Silicon (M1/M2/M3…), `Optaris-<version>-x64.dmg` for Intel.
+1. Pick the DMG for your Mac: `optaris-desktop-<version>-arm64.dmg` for Apple Silicon (M1/M2/M3…), `optaris-desktop-<version>-x64.dmg` for Intel.
 2. Drag **Optaris** into your Applications folder.
 3. On first launch macOS says _"Optaris is damaged and can't be opened."_ Clear the quarantine flag once, then open the app normally:
 

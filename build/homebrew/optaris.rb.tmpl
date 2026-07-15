@@ -1,0 +1,37 @@
+cask "optaris" do
+  version "__VERSION__"
+
+  on_arm do
+    sha256 "__SHA256_ARM__"
+    url "https://github.com/GetOptaris/optaris-desktop/releases/download/v#{version}/optaris-desktop-#{version}-arm64.dmg"
+  end
+  on_intel do
+    sha256 "__SHA256_X64__"
+    url "https://github.com/GetOptaris/optaris-desktop/releases/download/v#{version}/optaris-desktop-#{version}-x64.dmg"
+  end
+
+  name "Optaris"
+  desc "Local LLM gateway desktop app — route OpenAI/Claude/Gemini traffic across your upstream providers"
+  homepage "https://github.com/GetOptaris/optaris-desktop"
+
+  livecheck do
+    url :url
+    strategy :github_latest
+  end
+
+  app "Optaris.app"
+
+  # Unsigned build: strip the quarantine flag so Gatekeeper doesn't block first launch.
+  postflight do
+    system_command "/usr/bin/xattr",
+                   args: ["-dr", "com.apple.quarantine", "#{appdir}/Optaris.app"]
+  end
+
+  zap trash: [
+    "~/Library/Application Support/Optaris",
+    "~/Library/Application Support/optaris-desktop",
+    "~/Library/Preferences/com.getoptaris.desktop.plist",
+    "~/Library/Saved Application State/com.getoptaris.desktop.savedState",
+    "~/Library/Logs/Optaris",
+  ]
+end
