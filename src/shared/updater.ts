@@ -65,6 +65,12 @@ export interface UpdaterApi {
   onUpdateAvailable: (cb: (payload: UpdateAvailablePayload) => void) => () => void
   /** Subscribe to "already up to date" (mainly to answer a manual check). */
   onUpdateNotAvailable: (cb: () => void) => () => void
+  /**
+   * Subscribe to "updates can't be checked in this build" — a packaged app with no
+   * update feed (the `--dir` output `pnpm deploy:mac` installs lacks app-update.yml).
+   * Returns an unsubscribe fn.
+   */
+  onUnsupported: (cb: () => void) => () => void
   /** Subscribe to download progress (non-mac). Returns an unsubscribe fn. */
   onDownloadProgress: (cb: (payload: DownloadProgressPayload) => void) => () => void
   /** Subscribe to "update downloaded, ready to install". Returns an unsubscribe fn. */
@@ -89,6 +95,7 @@ export const UPDATER_IPC = {
   // main -> renderer (webContents.send / ipcRenderer.on)
   updateAvailable: 'updater:update-available',
   updateNotAvailable: 'updater:update-not-available',
+  unsupported: 'updater:unsupported',
   downloadProgress: 'updater:download-progress',
   updateDownloaded: 'updater:update-downloaded',
   error: 'updater:error'

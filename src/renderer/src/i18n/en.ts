@@ -151,6 +151,7 @@ const en = {
     checkForUpdates: 'Check for updates',
     checking: 'Checking…',
     upToDate: 'You’re on the latest version',
+    unsupported: 'Local build — updates can’t be checked',
     availableTitle: 'Update available: {version}',
     availableMacDescription: 'Download the new version from the release page.',
     download: 'Download',
