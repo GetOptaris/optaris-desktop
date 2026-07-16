@@ -37,6 +37,7 @@ const updater: UpdaterApi = {
   openReleasePage: () => ipcRenderer.invoke(UPDATER_IPC.openReleasePage),
   onUpdateAvailable: (cb) => subscribe(UPDATER_IPC.updateAvailable, cb),
   onUpdateNotAvailable: (cb) => subscribe(UPDATER_IPC.updateNotAvailable, () => cb()),
+  onUnsupported: (cb) => subscribe(UPDATER_IPC.unsupported, () => cb()),
   onDownloadProgress: (cb) => subscribe(UPDATER_IPC.downloadProgress, cb),
   onUpdateDownloaded: (cb) => subscribe(UPDATER_IPC.updateDownloaded, cb),
   onError: (cb) => subscribe(UPDATER_IPC.error, cb)

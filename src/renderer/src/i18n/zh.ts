@@ -147,6 +147,7 @@ const zh: Dict = {
     checkForUpdates: '检查更新',
     checking: '检查中…',
     upToDate: '已是最新版本',
+    unsupported: '本地构建，无法检查更新',
     availableTitle: '发现新版本：{version}',
     availableMacDescription: '请前往发布页下载新版本。',
     download: '下载',

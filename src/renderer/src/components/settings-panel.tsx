@@ -164,8 +164,8 @@ function AppearanceCard(): React.JSX.Element {
   )
 }
 
-/** Inline feedback for a *manual* check: nothing shown, "up to date", or "check failed". */
-type CheckNote = 'none' | 'upToDate' | 'error'
+/** Inline feedback for a *manual* check: nothing shown, "up to date", "check failed", or "unsupported". */
+type CheckNote = 'none' | 'upToDate' | 'error' | 'unsupported'
 
 /**
  * Version + manual update check. The available/downloaded toasts are owned by
@@ -201,10 +201,12 @@ function AboutCard(): React.JSX.Element {
     }
     const offAvailable = window.api.updater.onUpdateAvailable(() => finishManual('none'))
     const offNone = window.api.updater.onUpdateNotAvailable(() => finishManual('upToDate'))
+    const offUnsupported = window.api.updater.onUnsupported(() => finishManual('unsupported'))
     const offError = window.api.updater.onError(() => finishManual('error'))
     return () => {
       offAvailable()
       offNone()
+      offUnsupported()
       offError()
     }
   }, [])
@@ -229,6 +231,8 @@ function AboutCard(): React.JSX.Element {
           </span>
           {note === 'upToDate' ? (
             <p className="text-xs text-muted-foreground">{t('update.upToDate')}</p>
+          ) : note === 'unsupported' ? (
+            <p className="text-xs text-muted-foreground">{t('update.unsupported')}</p>
           ) : note === 'error' ? (
             <p className="text-xs text-destructive">{t('update.error')}</p>
           ) : null}

@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { app, ipcMain, shell, BrowserWindow } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import type { ProgressInfo, UpdateInfo } from 'electron-updater'
@@ -35,8 +37,24 @@ function send(channel: string, payload?: unknown): void {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
 }
 
+/**
+ * Whether electron-updater has a feed config to read. Dev reads dev-app-update.yml
+ * (forceDevUpdateConfig). A packaged app reads Resources/app-update.yml, which only
+ * exists in real distributable builds (dmg/nsis/AppImage) — NOT in the `--dir` output
+ * that `pnpm deploy:mac` installs. Without it checkForUpdates() throws ENOENT, so we
+ * short-circuit and tell the renderer updates aren't checkable in this build.
+ */
+function hasUpdateFeed(): boolean {
+  if (!app.isPackaged) return true
+  return existsSync(join(process.resourcesPath, 'app-update.yml'))
+}
+
 /** Run a check without leaking a rejected promise (dev/offline reject; `error` fires too). */
 async function safeCheck(): Promise<void> {
+  if (!hasUpdateFeed()) {
+    send(UPDATER_IPC.unsupported)
+    return
+  }
   try {
     await autoUpdater.checkForUpdates()
   } catch (err) {
