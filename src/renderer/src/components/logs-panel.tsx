@@ -70,10 +70,6 @@ export function LogsPanel(): React.JSX.Element {
   const [selected, setSelected] = useState<LogRow | null>(null)
   const [trace, setTrace] = useState<TraceRecord | null>(null)
   const [traceLoading, setTraceLoading] = useState(false)
-  // Monotonic token for the in-flight trace fetch. Each open/close bumps it; a resolved
-  // fetch only applies its result when its token is still current, so a slow query for a
-  // previously clicked row can't overwrite the trace of the row now on screen.
-  const traceToken = useRef(0)
   // Last-applied filters, so background polling reuses what the user actually applied
   // (the model box only applies on Enter/Refresh) instead of half-typed input.
   const appliedFilters = useRef<{ outcome: string; model: string }>({ outcome: ALL, model: '' })
@@ -168,31 +164,59 @@ export function LogsPanel(): React.JSX.Element {
     void runQuery({ outcome: next, model })
   }
 
-  // Open the detail dialog for a row and fetch its raw capture (may resolve to null when
-  // capture wasn't recorded — the dialog shows a hint in that case).
+  // Open the detail dialog for a row; the effect below fetches (and, while it's in progress,
+  // keeps refreshing) its capture.
   const openTrace = (row: LogRow): void => {
-    const token = ++traceToken.current
     setSelected(row)
     setTrace(null)
     setTraceLoading(true)
-    window.api.gateway
-      .queryTrace({ req_id: row.req_id, at: row.at })
-      .then((r) => {
-        if (token === traceToken.current) setTrace(r)
-      })
-      .catch(() => {
-        if (token === traceToken.current) setTrace(null)
-      })
-      .finally(() => {
-        if (token === traceToken.current) setTraceLoading(false)
-      })
   }
 
-  // Bump the token so a still-in-flight fetch for the closed row is ignored when it lands.
   const closeTrace = (): void => {
-    traceToken.current++
     setSelected(null)
   }
+
+  // Freshest state of the open row: the background list poll keeps `rows` current, so look the
+  // selected row up by id to reflect its latest phase/outcome (and to notice when it finishes).
+  // Falls back to the originally-clicked row if it scrolled out of the current page.
+  const liveRow = useMemo(
+    () => (selected ? (rows.find((r) => r.req_id === selected.req_id) ?? selected) : null),
+    [rows, selected]
+  )
+  const selectedInProgress = liveRow != null && isInProgress(liveRow)
+
+  // Load the open row's trace, and while it's still in progress keep re-fetching so the
+  // client/upstream payloads fill in as each step completes (the gateway serves a live partial
+  // snapshot until then). A finished row's capture is immutable, so once it completes we do one
+  // last fetch (which picks up the final archive) and stop polling.
+  useEffect(() => {
+    if (!selected) return
+    let active = true
+    const load = (): void => {
+      window.api.gateway
+        .queryTrace({ req_id: selected.req_id, at: selected.at })
+        .then((r) => {
+          if (active) setTrace(r)
+        })
+        .catch(() => {
+          if (active) setTrace(null)
+        })
+        .finally(() => {
+          if (active) setTraceLoading(false)
+        })
+    }
+    load()
+    if (!selectedInProgress) {
+      return () => {
+        active = false
+      }
+    }
+    const id = setInterval(load, LIVE_REFRESH_MS)
+    return () => {
+      active = false
+      clearInterval(id)
+    }
+  }, [selected, selectedInProgress])
 
   return (
     <div className="flex min-h-0 flex-col gap-4">
@@ -329,7 +353,7 @@ export function LogsPanel(): React.JSX.Element {
       </div>
 
       <LogTraceDialog
-        row={selected}
+        row={liveRow}
         trace={trace}
         loading={traceLoading}
         groupNameOf={groupNameOf}

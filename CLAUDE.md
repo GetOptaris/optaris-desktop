@@ -85,7 +85,7 @@ Config changes are **not signaled** — the main process just writes the file, a
 
 The Go sidecar is the **sole writer** of `optaris.db` (opened WAL mode) and the day-rolling `capture/YYYY-MM-DD.jsonl` files. It uses the **pure-Go `modernc.org/sqlite`** driver so builds stay `CGO_ENABLED=0` (static, cross-compilable) — do not swap in a cgo SQLite. Events flow through a buffered channel drained by a single goroutine (drops-and-counts on overflow; requests are never blocked for logging).
 
-The main process reads this data **read-only**: `logs.ts` uses `node:sqlite` (bundled with Electron's Node — no native module) to `SELECT` from the WAL DB concurrently; `trace.ts` scans the JSONL capture files by day since there's no index. When changing the `requests` table schema in `store.go`, update the `COLUMNS` list in `logs.ts` and the `LogRow` type in `shared/gateway.ts` to match.
+The main process reads this data **read-only**: `logs.ts` uses `node:sqlite` (bundled with Electron's Node — no native module) to `SELECT` from the WAL DB concurrently; `trace.ts` reads one request's raw capture — first the `live_captures` table (a partial snapshot of an **in-flight** request, refreshed per progress phase and deleted on completion, so the detail view fills in step by step live), then falling back to scanning the JSONL capture files by day (the finished archive) since there's no index. When changing the `requests` table schema in `store.go`, update the `COLUMNS` list in `logs.ts` and the `LogRow` type in `shared/gateway.ts` to match.
 
 ### Client auto-config: the second place secrets touch disk
 

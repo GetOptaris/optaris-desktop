@@ -1,5 +1,6 @@
 import { createReadStream, existsSync } from 'node:fs'
 import { createInterface } from 'node:readline'
+import { DatabaseSync } from 'node:sqlite'
 import { join } from 'node:path'
 import { getDataDir } from './config'
 import type { TraceQuery, TraceRecord } from '../shared/gateway'
@@ -7,11 +8,19 @@ import type { TraceQuery, TraceRecord } from '../shared/gateway'
 /**
  * Read-only access to the gateway's raw request captures.
  *
- * The gateway (a separate process) appends one JSON object per completed request to
+ * A finished request's capture is one JSON object the gateway appended to
  * data-dir/capture/YYYY-MM-DD.jsonl (day-rolling, only when capture is enabled — see
  * gateway/store.go writeCapture). There is no index, so we locate the day file from the
- * row's timestamp and scan it line-by-line for the matching req_id, stopping at the
- * first hit. Returns null when capture was off for that request (or the file is gone).
+ * row's timestamp and scan it line-by-line for the matching req_id, stopping at the first
+ * hit.
+ *
+ * A request that is **still in flight** has no JSONL line yet; instead the gateway keeps a
+ * live, partial snapshot in the `live_captures` table (data-dir/optaris.db), refreshed as the
+ * request progresses and deleted once it completes. We read that first — it's a cheap
+ * primary-key lookup, so polling an in-progress request never scans the capture files.
+ *
+ * Returns null when neither exists (capture was off for that request, failed_only mode
+ * skipped a clean success, or the file has rolled off).
  */
 
 /** Format a Date as local `YYYY-MM-DD`, matching the gateway's at.Format("2006-01-02"). */
@@ -60,13 +69,42 @@ async function findInFile(path: string, reqId: string): Promise<TraceRecord | nu
 }
 
 /**
- * Read the raw capture for a single request. Returns null when no capture exists for it
- * (capture disabled, failed_only mode skipped a clean success, or the file has rolled off).
+ * Read the in-flight partial capture for a request from the live_captures table, or null
+ * when the request isn't currently running (already completed / never captured). Read-only,
+ * and resilient to a not-yet-created DB or table.
+ */
+function queryLiveTrace(reqId: string): TraceRecord | null {
+  const dbPath = join(getDataDir(), 'optaris.db')
+  if (!existsSync(dbPath)) return null
+  let db: DatabaseSync | undefined
+  try {
+    db = new DatabaseSync(dbPath, { readOnly: true })
+    const row = db.prepare('SELECT data FROM live_captures WHERE req_id = ?').get(reqId) as
+      { data: string } | undefined
+    if (!row) return null
+    return JSON.parse(row.data) as TraceRecord
+  } catch {
+    return null // DB locked, table absent on an older gateway, or malformed data → treat as "no live capture"
+  } finally {
+    db?.close()
+  }
+}
+
+/**
+ * Read the raw capture for a single request. Returns the live partial snapshot while the
+ * request is in flight (partial: true), the finished archive once it completes, or null when
+ * no capture exists for it (capture disabled, failed_only mode skipped a clean success, or
+ * the file has rolled off).
  */
 export async function queryTrace(params: TraceQuery): Promise<TraceRecord | null> {
   const reqId = params?.req_id
   const at = params?.at
   if (!reqId || typeof at !== 'number' || !Number.isFinite(at)) return null
+
+  // In-flight → live_captures (cheap PK lookup); finished → the JSONL archive. Live first so
+  // polling an in-progress request never scans the (potentially large) capture files.
+  const live = queryLiveTrace(reqId)
+  if (live) return live
 
   const dir = join(getDataDir(), 'capture')
   for (const day of candidateDays(at)) {

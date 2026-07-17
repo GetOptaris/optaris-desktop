@@ -158,14 +158,46 @@ CREATE TABLE IF NOT EXISTS requests (
     upstreams_tried       INTEGER  -- distinct upstream channels attempted
 );`
 
+// createLiveCapturesTable holds the raw capture of requests **still in flight**, one row
+// per req_id, refreshed as the request progresses (client request A, then each upstream
+// attempt's B/C) so the control plane can show an in-progress request step by step. `data`
+// is a captureRecord JSON, already secret-redacted. A row is deleted the moment its request
+// completes (the finished capture then lives in the JSONL archive instead), so this table
+// only ever holds currently-running requests — it is cleared at startup to drop rows a
+// previous process left behind when it died mid-request.
+const createLiveCapturesTable = `
+CREATE TABLE IF NOT EXISTS live_captures (
+    req_id     TEXT PRIMARY KEY,
+    at         INTEGER, -- unix milliseconds (request start), mirrors requests.at
+    updated_at INTEGER, -- unix milliseconds of the last snapshot refresh
+    data       TEXT     -- captureRecord JSON (secret-redacted); partial while in flight
+);`
+
 func initSchema(db *sql.DB) error {
 	if _, err := db.Exec(createRequestsTable); err != nil {
 		return fmt.Errorf("create schema: %w", err)
 	}
+	if _, err := db.Exec(createLiveCapturesTable); err != nil {
+		return fmt.Errorf("create live_captures schema: %w", err)
+	}
 	if err := migrateRequests(db); err != nil {
 		return err
 	}
+	if err := clearLiveCaptures(db); err != nil {
+		return err
+	}
 	return sweepOrphans(db)
+}
+
+// clearLiveCaptures empties the in-flight capture table at startup. Any row here belongs to
+// a request that was running when a previous process exited — it will never complete now, so
+// (like sweepOrphans does for summary rows) we drop the stale snapshots once, before the
+// consumer goroutine starts writing new ones.
+func clearLiveCaptures(db *sql.DB) error {
+	if _, err := db.Exec("DELETE FROM live_captures"); err != nil {
+		return fmt.Errorf("clear live_captures: %w", err)
+	}
+	return nil
 }
 
 // sweepOrphans finalizes rows left "in progress" (outcome NULL) by a previous process.
@@ -232,9 +264,10 @@ func existingColumns(db *sql.DB, table string) (map[string]struct{}, error) {
 // persistedPhase reports whether an event's phase produces a summary-row write. We
 // persist every progress milestone so the control plane can show an in-flight request
 // live (issue #22): Received seeds the row (outcome NULL = "in progress"), the middle
-// phases advance its `phase` column, and Completed finalizes it. AttemptEnd is skipped
-// — it carries nothing the surrounding AttemptStart/Committed/Completed don't already,
-// so persisting it would just be a redundant UPSERT.
+// phases advance its `phase` column, and Completed finalizes it. AttemptEnd and
+// UpstreamRequest are skipped here — they carry nothing the summary row needs beyond
+// what the surrounding phases already set (they matter only for the live raw capture,
+// handled separately), so persisting them would just be a redundant UPSERT.
 func persistedPhase(p optaris.Phase) bool {
 	switch p {
 	case optaris.PhaseReceived,
@@ -250,10 +283,12 @@ func persistedPhase(p optaris.Phase) bool {
 }
 
 // enqueue is the OnEvent callback body. It runs synchronously in the request
-// goroutine, so it must not block: it filters to the phases we persist and hands the
-// event off through the buffered channel, dropping and counting on overflow.
+// goroutine, so it must not block: it filters to the events we persist and hands them
+// off through the buffered channel, dropping and counting on overflow. Beyond the
+// summary phases it also admits any capture-bearing event (progress snapshots for the
+// live in-progress view — see writeLiveCapture), which the phase filter alone would drop.
 func (s *Store) enqueue(ev optaris.Event) {
-	if !persistedPhase(ev.Phase) {
+	if !persistedPhase(ev.Phase) && ev.Capture == nil {
 		return
 	}
 	select {
@@ -285,17 +320,29 @@ func (s *Store) run() {
 	}
 
 	consume := func(ev optaris.Event) {
-		// Progress events (Received … Failover) only advance the summary row; the
-		// stderr line and the raw capture belong to the terminal Completed event.
-		if ev.Phase == optaris.PhaseCompleted {
+		switch {
+		case ev.Phase == optaris.PhaseCompleted:
+			// Terminal: stderr line + the final raw capture archive, then hand off — the
+			// completed request is now served from the JSONL / finalized summary row, so its
+			// transient live snapshot is obsolete and must go (delete even when nothing was
+			// archived, e.g. a clean success under failed_only).
 			logCompleted(ev)
 			if ev.Capture != nil {
 				s.writeCapture(ev)
 			}
+			s.deleteLiveCapture(ev.ReqID)
+		case ev.Capture != nil:
+			// A progress-phase snapshot: upsert it so the control plane can show the request
+			// step by step while it is still in flight.
+			s.writeLiveCapture(ev)
 		}
-		batch = append(batch, ev)
-		if len(batch) >= sqlBatchMax {
-			flush()
+		// Only the summary phases advance the requests row; capture-only events (AttemptEnd /
+		// UpstreamRequest) must not, or their empty phase would clobber the stored one.
+		if persistedPhase(ev.Phase) {
+			batch = append(batch, ev)
+			if len(batch) >= sqlBatchMax {
+				flush()
+			}
 		}
 	}
 
@@ -493,10 +540,12 @@ func summaryRow(ev *optaris.Event) reqRow {
 	return r
 }
 
-// captureRecord is one JSONL line: request identity plus the full-chain raw
-// payload. Bodies render as strings (readable JSON) rather than base64. It carries
-// NO channel APIKey field by construction — the engine already redacts auth
-// material, and redactSecrets is the final guard.
+// captureRecord is one JSONL line (archive) or one live_captures.data blob (in-flight):
+// request identity plus the full-chain raw payload. Bodies render as strings (readable
+// JSON) rather than base64. It carries NO channel APIKey field by construction — the engine
+// already redacts auth material, and redactSecrets is the final guard. `Partial` is true for
+// the live in-flight snapshot (response of the last attempt may be missing) and false for the
+// finished archive.
 type captureRecord struct {
 	ReqID      string `json:"req_id"`
 	At         int64  `json:"at"`
@@ -513,6 +562,7 @@ type captureRecord struct {
 
 	StrippedUsage       bool `json:"stripped_usage"`
 	CommittedThenFailed bool `json:"committed_then_failed"`
+	Partial             bool `json:"partial"`
 }
 
 type attemptRecord struct {
@@ -533,9 +583,11 @@ type attemptRecord struct {
 	PassedCommit bool   `json:"passed_commit"`
 }
 
-// writeCapture appends one capture line to today's JSONL file. Called only when
-// ev.Capture != nil (the engine decides that from CaptureEnabled + CaptureMode).
-func (s *Store) writeCapture(ev optaris.Event) {
+// buildCaptureRecord projects an Event's Capture onto the on-disk/on-DB captureRecord.
+// Shared by the JSONL archive (writeCapture) and the live in-flight snapshot
+// (writeLiveCapture); the caller sets Partial. Outcome/HTTPStatus are only meaningful on
+// the terminal event and stay zero-valued for progress snapshots.
+func buildCaptureRecord(ev optaris.Event) captureRecord {
 	capt := ev.Capture
 	rec := captureRecord{
 		ReqID:               ev.ReqID,
@@ -567,15 +619,30 @@ func (s *Store) writeCapture(ev optaris.Event) {
 			PassedCommit:      a.PassedCommit,
 		})
 	}
+	return rec
+}
 
-	line, err := json.Marshal(&rec)
+// marshalCapture serializes a record and applies the final APIKey-redaction guard —
+// never let a plaintext upstream APIKey reach disk/DB, even if a future core change
+// stopped redacting it somewhere upstream of us.
+func (s *Store) marshalCapture(rec *captureRecord) ([]byte, error) {
+	line, err := json.Marshal(rec)
+	if err != nil {
+		return nil, err
+	}
+	return redactSecrets(line, s.holder.secrets()), nil
+}
+
+// writeCapture appends one finished capture line to today's JSONL file. Called only when
+// ev.Capture != nil on the Completed event (the engine decides that from CaptureEnabled +
+// CaptureMode).
+func (s *Store) writeCapture(ev optaris.Event) {
+	rec := buildCaptureRecord(ev) // Partial defaults to false: this is the finished archive
+	line, err := s.marshalCapture(&rec)
 	if err != nil {
 		log.Printf("capture marshal failed req_id=%s: %v", ev.ReqID, err)
 		return
 	}
-	// Final defense: never let a plaintext upstream APIKey reach disk, even if a
-	// future core change stopped redacting it somewhere upstream of us.
-	line = redactSecrets(line, s.holder.secrets())
 
 	f, err := s.captureFileFor(ev.At)
 	if err != nil {
@@ -584,6 +651,36 @@ func (s *Store) writeCapture(ev optaris.Event) {
 	}
 	if _, err := f.Write(append(line, '\n')); err != nil {
 		log.Printf("capture write failed req_id=%s: %v", ev.ReqID, err)
+	}
+}
+
+// upsertLiveCapture upserts the in-flight snapshot table.
+const upsertLiveCapture = `
+INSERT INTO live_captures (req_id, at, updated_at, data) VALUES (?,?,?,?)
+ON CONFLICT(req_id) DO UPDATE SET updated_at = excluded.updated_at, data = excluded.data;`
+
+// writeLiveCapture upserts one in-progress request's partial capture so the control plane
+// can read it while the request is still running. Called on the progress phases that carry
+// a snapshot; superseded on each refresh and deleted once the request completes.
+func (s *Store) writeLiveCapture(ev optaris.Event) {
+	rec := buildCaptureRecord(ev)
+	rec.Partial = true
+	line, err := s.marshalCapture(&rec)
+	if err != nil {
+		log.Printf("live capture marshal failed req_id=%s: %v", ev.ReqID, err)
+		return
+	}
+	at := ev.At.UnixMilli()
+	if _, err := s.db.Exec(upsertLiveCapture, ev.ReqID, at, at, string(line)); err != nil {
+		log.Printf("live capture upsert failed req_id=%s: %v", ev.ReqID, err)
+	}
+}
+
+// deleteLiveCapture removes an in-flight snapshot once its request has completed (the
+// finished capture, if any, now lives in the JSONL archive). Idempotent.
+func (s *Store) deleteLiveCapture(reqID string) {
+	if _, err := s.db.Exec("DELETE FROM live_captures WHERE req_id = ?", reqID); err != nil {
+		log.Printf("live capture delete failed req_id=%s: %v", reqID, err)
 	}
 }
 

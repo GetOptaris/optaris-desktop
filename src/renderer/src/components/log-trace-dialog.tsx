@@ -116,6 +116,10 @@ function AttemptCard({
   index: number
   t: TFunction
 }): React.JSX.Element {
+  // The in-flight upstream request on a live partial trace: sent, no response yet. A finished
+  // transport failure also has resp_status 0, but it carries a failure_class, so this only
+  // matches the genuinely-pending attempt.
+  const pending = attempt.resp_status === 0 && !attempt.failure_class && !attempt.success
   return (
     <div className="grid gap-3 rounded-md border p-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -126,12 +130,18 @@ function AttemptCard({
         <Badge
           className={cn(
             'ml-auto font-normal',
-            attempt.success ? outcomeBadgeClass('success') : outcomeBadgeClass('failed')
+            pending
+              ? outcomeBadgeClass(null)
+              : attempt.success
+                ? outcomeBadgeClass('success')
+                : outcomeBadgeClass('failed')
           )}
         >
-          {attempt.success
-            ? t('logs.outcomes.success')
-            : attempt.failure_class || t('logs.outcomes.failed')}
+          {pending
+            ? t('logs.detail.awaitingResponse')
+            : attempt.success
+              ? t('logs.outcomes.success')
+              : attempt.failure_class || t('logs.outcomes.failed')}
         </Badge>
       </div>
 
@@ -146,15 +156,25 @@ function AttemptCard({
         <BodyBlock body={attempt.req_body} t={t} />
       </Section>
 
-      <Section
-        title={`${t('logs.detail.upstreamResponse')} · ${t('logs.status')} ${attempt.resp_status || '—'}`}
-      >
-        <HeadersTable headers={attempt.resp_headers} />
-        <BodyBlock body={attempt.resp_body} t={t} />
-        {attempt.resp_body_truncated ? (
-          <p className="text-xs text-amber-600 dark:text-amber-400">{t('logs.detail.truncated')}</p>
-        ) : null}
-      </Section>
+      {pending ? (
+        <Section title={t('logs.detail.upstreamResponse')}>
+          <p className="text-xs text-muted-foreground italic">
+            {t('logs.detail.awaitingResponse')}
+          </p>
+        </Section>
+      ) : (
+        <Section
+          title={`${t('logs.detail.upstreamResponse')} · ${t('logs.status')} ${attempt.resp_status || '—'}`}
+        >
+          <HeadersTable headers={attempt.resp_headers} />
+          <BodyBlock body={attempt.resp_body} t={t} />
+          {attempt.resp_body_truncated ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              {t('logs.detail.truncated')}
+            </p>
+          ) : null}
+        </Section>
+      )}
     </div>
   )
 }
@@ -205,6 +225,13 @@ export function LogTraceDialog({
             <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
           ) : trace ? (
             <>
+              {trace.partial ? (
+                <div className="flex items-center gap-2 rounded-md border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-700 dark:text-sky-400">
+                  <span className="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-sky-500" />
+                  <span>{t('logs.detail.liveHint')}</span>
+                </div>
+              ) : null}
+
               {trace.stripped_usage || trace.committed_then_failed ? (
                 <div className="grid gap-1 text-xs text-muted-foreground">
                   {trace.committed_then_failed ? (

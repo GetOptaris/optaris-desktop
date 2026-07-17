@@ -178,6 +178,7 @@ export interface TraceAttempt {
   upstream_url: string
   req_headers: Record<string, string[]> | null
   req_body: string
+  /** Upstream HTTP status. `0` means no response yet — the request was sent and is awaiting the upstream (only possible on a `partial` TraceRecord's last attempt) or the connection failed. */
   resp_status: number
   resp_headers: Record<string, string[]> | null
   resp_body: string
@@ -189,8 +190,10 @@ export interface TraceAttempt {
 
 /**
  * The full raw capture for a single request: the client→gateway request (A) plus one
- * TraceAttempt per upstream try. Mirrors gateway/store.go's captureRecord. Only present
- * when capture was enabled for this request (see queryTrace, which returns null otherwise).
+ * TraceAttempt per upstream try. Mirrors gateway/store.go's captureRecord. Present either as
+ * the finished archive (read from the JSONL capture files) or, while the request is still in
+ * flight, as a live partial snapshot (read from the live_captures table — see queryTrace,
+ * which returns null when neither exists).
  */
 export interface TraceRecord {
   req_id: string
@@ -205,6 +208,8 @@ export interface TraceRecord {
   attempts: TraceAttempt[]
   stripped_usage: boolean
   committed_then_failed: boolean
+  /** True for a live in-flight snapshot (still updating; the last attempt may be awaiting its response), false for the finished archive. Absent on records written before this field existed. */
+  partial?: boolean
 }
 
 /** The external client apps Optaris can auto-configure to point at the local gateway. */
@@ -263,7 +268,7 @@ export interface GatewayApi {
   updateConfig: (config: ConfigInput) => Promise<void>
   /** Query the request-summary log, newest first. */
   queryLogs: (params?: LogQuery) => Promise<LogRow[]>
-  /** Read one request's raw capture (client/upstream headers+bodies). Null when none was recorded. */
+  /** Read one request's raw capture (client/upstream headers+bodies). While in flight, returns a live partial snapshot (`partial: true`); null when none was recorded. */
   queryTrace: (params: TraceQuery) => Promise<TraceRecord | null>
   /**
    * Replace the gateway's client-facing API key. Returns the new value plus the ids of the

@@ -225,7 +225,10 @@ const zh: Dict = {
       noCaptureTitle: '该请求没有抓取记录。',
       noCaptureHint: '前往「设置」开启「请求抓取」并将模式设为「全部请求」，即可记录完整往返。',
       inProgressTitle: '请求仍在进行中。',
-      inProgressHint: '完整的往返抓取会在请求结束后才可查看。'
+      inProgressHint:
+        '前往「设置」开启「请求抓取」，即可在请求进行时逐步查看客户端与上游的往返内容。',
+      liveHint: '实时快照——会随请求推进持续更新，最后一步可能仍在等待上游响应。',
+      awaitingResponse: '等待上游响应…'
     }
   }
 }

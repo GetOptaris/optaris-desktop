@@ -2,6 +2,8 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
+	"net/http"
 	"path/filepath"
 	"testing"
 	"time"
@@ -188,5 +190,119 @@ func TestStoreSweepsOrphansOnStart(t *testing.T) {
 	}
 	if phase.String != "done" {
 		t.Errorf("phase = %q, want done", phase.String)
+	}
+}
+
+// captureEvent builds a lifecycle event carrying a (partial) capture: the client request A
+// plus one upstream attempt's B/C. Mirrors what the engine attaches on the progress and
+// Completed phases when capture is on.
+func captureEvent(phase optaris.Phase, reqID string, at time.Time) optaris.Event {
+	ev := baseEvent(phase, reqID, at)
+	ev.Capture = &optaris.CaptureData{
+		ReqHeaders: http.Header{"Content-Type": {"application/json"}},
+		ReqBody:    []byte(`{"model":"gpt-4o"}`),
+		Attempts: []optaris.AttemptCapture{{
+			ChannelID:   "ch1",
+			Model:       "gpt-4o",
+			UpstreamURL: "https://upstream.example/v1/chat/completions",
+			ReqHeaders:  http.Header{"Content-Type": {"application/json"}},
+			ReqBody:     []byte(`{"model":"gpt-4o"}`),
+			RespStatus:  200,
+			RespBody:    []byte(`{"ok":true}`),
+		}},
+	}
+	return ev
+}
+
+// liveCaptureData reads the in-flight snapshot's JSON for a request, and whether a row exists.
+func liveCaptureData(t *testing.T, db *sql.DB, reqID string) (string, bool) {
+	t.Helper()
+	var data string
+	switch err := db.QueryRow("SELECT data FROM live_captures WHERE req_id = ?", reqID).Scan(&data); err {
+	case nil:
+		return data, true
+	case sql.ErrNoRows:
+		return "", false
+	default:
+		t.Fatalf("select live_captures: %v", err)
+		return "", false
+	}
+}
+
+// TestLiveCaptureWrittenWhileInProgress verifies that a request's partial capture is upserted
+// into live_captures on the progress phases (so the control plane can show it step by step),
+// marked partial, before any Completed event lands.
+func TestLiveCaptureWrittenWhileInProgress(t *testing.T) {
+	dir := t.TempDir()
+	s := newTestStore(t, dir)
+
+	at := time.UnixMilli(1_700_000_000_000)
+	s.enqueue(captureEvent(optaris.PhaseReceived, "req-live", at))
+	s.enqueue(captureEvent(optaris.PhaseAttemptEnd, "req-live", at.Add(time.Second)))
+	s.Close()
+
+	db := openReadDB(t, dir)
+	data, ok := liveCaptureData(t, db, "req-live")
+	if !ok {
+		t.Fatal("live_captures row missing for an in-progress request")
+	}
+	var rec captureRecord
+	if err := json.Unmarshal([]byte(data), &rec); err != nil {
+		t.Fatalf("unmarshal live data: %v", err)
+	}
+	if !rec.Partial {
+		t.Error("live capture Partial = false, want true")
+	}
+	if rec.ReqBody == "" {
+		t.Error("live capture missing the client request body")
+	}
+	if len(rec.Attempts) != 1 {
+		t.Fatalf("live capture attempts = %d, want 1", len(rec.Attempts))
+	}
+}
+
+// TestLiveCaptureDeletedOnCompletion verifies the handoff: once a request completes, its
+// transient live snapshot is removed (the finished capture, if any, lives in the JSONL
+// archive instead) — even for a clean success, which under failed_only archives nothing.
+func TestLiveCaptureDeletedOnCompletion(t *testing.T) {
+	dir := t.TempDir()
+	s := newTestStore(t, dir)
+
+	at := time.UnixMilli(1_700_000_000_000)
+	s.enqueue(captureEvent(optaris.PhaseReceived, "req-done", at))
+	done := captureEvent(optaris.PhaseCompleted, "req-done", at.Add(time.Second))
+	done.Outcome, done.HTTPStatus = "success", 200
+	s.enqueue(done)
+	s.Close()
+
+	db := openReadDB(t, dir)
+	if _, ok := liveCaptureData(t, db, "req-done"); ok {
+		t.Error("live_captures row should be deleted once the request completes")
+	}
+}
+
+// TestLiveCaptureClearedOnStart verifies that a live snapshot left behind by a process that
+// died mid-request (never completing) is dropped when a fresh store opens the same data dir,
+// mirroring the summary-row orphan sweep.
+func TestLiveCaptureClearedOnStart(t *testing.T) {
+	dir := t.TempDir()
+
+	// First "process": a request is received and captured, then the process dies in flight.
+	s1 := newTestStore(t, dir)
+	s1.enqueue(captureEvent(optaris.PhaseReceived, "req-stale", time.UnixMilli(1_700_000_000_000)))
+	s1.Close()
+
+	db1 := openReadDB(t, dir)
+	if _, ok := liveCaptureData(t, db1, "req-stale"); !ok {
+		t.Fatal("expected a stale live_captures row after the first process")
+	}
+
+	// Second "process": opening the store clears the stale snapshot at startup.
+	s2 := newTestStore(t, dir)
+	s2.Close()
+
+	db2 := openReadDB(t, dir)
+	if _, ok := liveCaptureData(t, db2, "req-stale"); ok {
+		t.Error("startup should clear stale live_captures rows")
 	}
 }

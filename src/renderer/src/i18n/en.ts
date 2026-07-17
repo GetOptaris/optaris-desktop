@@ -230,7 +230,11 @@ const en = {
       noCaptureHint:
         'Enable “Request capture” in Settings and set the mode to “All requests” to record full round-trips.',
       inProgressTitle: 'Request still in progress.',
-      inProgressHint: 'The full round-trip capture becomes available once the request finishes.'
+      inProgressHint:
+        'Enable “Request capture” in Settings to watch the client and upstream payloads appear step by step while the request runs.',
+      liveHint:
+        'Live snapshot — updating as the request runs. The final step may still be awaiting its upstream response.',
+      awaitingResponse: 'Awaiting upstream response…'
     }
   }
 }
