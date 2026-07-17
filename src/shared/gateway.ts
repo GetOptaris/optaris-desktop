@@ -114,7 +114,8 @@ export interface LogQuery {
   limit?: number
   /** Keyset pagination: only rows with `at` strictly less than this (unix ms). Newest first. */
   before?: number
-  /** Filter by outcome: success / failed / client_canceled / rejected. */
+  /** Filter by outcome: success / failed / client_canceled / rejected / interrupted, or the
+   * sentinel `in_progress` for requests the gateway hasn't finalized yet (outcome IS NULL). */
   outcome?: string
   group_id?: string
   channel_id?: string
@@ -123,8 +124,11 @@ export interface LogQuery {
 }
 
 /**
- * One row of the gateway's `requests` summary table (see gateway/store.go). Usage
- * columns are NULL on any non-success outcome, so every nullable column is `| null`.
+ * One row of the gateway's `requests` summary table (see gateway/store.go). A row is
+ * written the moment a request is received and UPSERTed through its lifecycle, so it
+ * can represent an in-flight request: while running, `outcome` is null and `phase`
+ * tracks the current stage; once finished, `outcome` is set. Usage columns are null on
+ * any non-success outcome, so every nullable column is `| null`.
  */
 export interface LogRow {
   req_id: string
@@ -134,9 +138,12 @@ export interface LogRow {
   stream: number | null
   channel_id: string | null
   channel_name: string | null
+  /** Final outcome: success / failed / client_canceled / rejected / interrupted. Null while the request is still in progress. */
   outcome: string | null
   http_status: number | null
   fail_class: string | null
+  /** Current lifecycle stage: received / connecting / streaming / failover / done. Drives the live "in progress" indicator; null on rows written before this column existed. */
+  phase: string | null
   first_token_ms: number | null
   input_tokens: number | null
   cache_read_tokens: number | null
@@ -171,6 +178,7 @@ export interface TraceAttempt {
   upstream_url: string
   req_headers: Record<string, string[]> | null
   req_body: string
+  /** Upstream HTTP status. `0` means no response yet — the request was sent and is awaiting the upstream (only possible on a `partial` TraceRecord's last attempt) or the connection failed. */
   resp_status: number
   resp_headers: Record<string, string[]> | null
   resp_body: string
@@ -182,8 +190,10 @@ export interface TraceAttempt {
 
 /**
  * The full raw capture for a single request: the client→gateway request (A) plus one
- * TraceAttempt per upstream try. Mirrors gateway/store.go's captureRecord. Only present
- * when capture was enabled for this request (see queryTrace, which returns null otherwise).
+ * TraceAttempt per upstream try. Mirrors gateway/store.go's captureRecord. Present either as
+ * the finished archive (read from the JSONL capture files) or, while the request is still in
+ * flight, as a live partial snapshot (read from the live_captures table — see queryTrace,
+ * which returns null when neither exists).
  */
 export interface TraceRecord {
   req_id: string
@@ -198,6 +208,8 @@ export interface TraceRecord {
   attempts: TraceAttempt[]
   stripped_usage: boolean
   committed_then_failed: boolean
+  /** True for a live in-flight snapshot (still updating; the last attempt may be awaiting its response), false for the finished archive. Absent on records written before this field existed. */
+  partial?: boolean
 }
 
 /** The external client apps Optaris can auto-configure to point at the local gateway. */
@@ -256,7 +268,7 @@ export interface GatewayApi {
   updateConfig: (config: ConfigInput) => Promise<void>
   /** Query the request-summary log, newest first. */
   queryLogs: (params?: LogQuery) => Promise<LogRow[]>
-  /** Read one request's raw capture (client/upstream headers+bodies). Null when none was recorded. */
+  /** Read one request's raw capture (client/upstream headers+bodies). While in flight, returns a live partial snapshot (`partial: true`); null when none was recorded. */
   queryTrace: (params: TraceQuery) => Promise<TraceRecord | null>
   /**
    * Replace the gateway's client-facing API key. Returns the new value plus the ids of the

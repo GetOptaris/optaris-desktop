@@ -5,8 +5,10 @@ import {
   clientLabel,
   fmtNum,
   fmtTime,
+  isInProgress,
   outcomeBadgeClass,
   outcomeLabel,
+  phaseLabel,
   streamLabel
 } from '@/lib/log-format'
 import { useT } from '@/i18n'
@@ -114,6 +116,10 @@ function AttemptCard({
   index: number
   t: TFunction
 }): React.JSX.Element {
+  // The in-flight upstream request on a live partial trace: sent, no response yet. A finished
+  // transport failure also has resp_status 0, but it carries a failure_class, so this only
+  // matches the genuinely-pending attempt.
+  const pending = attempt.resp_status === 0 && !attempt.failure_class && !attempt.success
   return (
     <div className="grid gap-3 rounded-md border p-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -124,12 +130,18 @@ function AttemptCard({
         <Badge
           className={cn(
             'ml-auto font-normal',
-            attempt.success ? outcomeBadgeClass('success') : outcomeBadgeClass('failed')
+            pending
+              ? outcomeBadgeClass(null)
+              : attempt.success
+                ? outcomeBadgeClass('success')
+                : outcomeBadgeClass('failed')
           )}
         >
-          {attempt.success
-            ? t('logs.outcomes.success')
-            : attempt.failure_class || t('logs.outcomes.failed')}
+          {pending
+            ? t('logs.detail.awaitingResponse')
+            : attempt.success
+              ? t('logs.outcomes.success')
+              : attempt.failure_class || t('logs.outcomes.failed')}
         </Badge>
       </div>
 
@@ -144,15 +156,25 @@ function AttemptCard({
         <BodyBlock body={attempt.req_body} t={t} />
       </Section>
 
-      <Section
-        title={`${t('logs.detail.upstreamResponse')} · ${t('logs.status')} ${attempt.resp_status || '—'}`}
-      >
-        <HeadersTable headers={attempt.resp_headers} />
-        <BodyBlock body={attempt.resp_body} t={t} />
-        {attempt.resp_body_truncated ? (
-          <p className="text-xs text-amber-600 dark:text-amber-400">{t('logs.detail.truncated')}</p>
-        ) : null}
-      </Section>
+      {pending ? (
+        <Section title={t('logs.detail.upstreamResponse')}>
+          <p className="text-xs text-muted-foreground italic">
+            {t('logs.detail.awaitingResponse')}
+          </p>
+        </Section>
+      ) : (
+        <Section
+          title={`${t('logs.detail.upstreamResponse')} · ${t('logs.status')} ${attempt.resp_status || '—'}`}
+        >
+          <HeadersTable headers={attempt.resp_headers} />
+          <BodyBlock body={attempt.resp_body} t={t} />
+          {attempt.resp_body_truncated ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              {t('logs.detail.truncated')}
+            </p>
+          ) : null}
+        </Section>
+      )}
     </div>
   )
 }
@@ -174,10 +196,16 @@ export function LogTraceDialog({
           {row ? (
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
               <Meta label={t('logs.time')}>{fmtTime(row.at)}</Meta>
-              <Meta label={t('logs.outcome')}>
-                <Badge className={cn('font-normal', outcomeBadgeClass(row.outcome))}>
-                  {outcomeLabel(t, row.outcome)}
-                </Badge>
+              <Meta label={isInProgress(row) ? t('logs.phase') : t('logs.outcome')}>
+                {isInProgress(row) ? (
+                  <Badge className={cn('font-normal', outcomeBadgeClass(null))}>
+                    {phaseLabel(t, row.phase)}
+                  </Badge>
+                ) : (
+                  <Badge className={cn('font-normal', outcomeBadgeClass(row.outcome))}>
+                    {outcomeLabel(t, row.outcome)}
+                  </Badge>
+                )}
               </Meta>
               <Meta label={t('logs.status')}>{fmtNum(row.http_status)}</Meta>
               <Meta label={t('logs.channel')}>{row.channel_name || '—'}</Meta>
@@ -197,6 +225,13 @@ export function LogTraceDialog({
             <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
           ) : trace ? (
             <>
+              {trace.partial ? (
+                <div className="flex items-center gap-2 rounded-md border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-700 dark:text-sky-400">
+                  <span className="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-sky-500" />
+                  <span>{t('logs.detail.liveHint')}</span>
+                </div>
+              ) : null}
+
               {trace.stripped_usage || trace.committed_then_failed ? (
                 <div className="grid gap-1 text-xs text-muted-foreground">
                   {trace.committed_then_failed ? (
@@ -220,8 +255,16 @@ export function LogTraceDialog({
             </>
           ) : (
             <div className="grid gap-1 py-6 text-center">
-              <p className="text-sm font-medium">{t('logs.detail.noCaptureTitle')}</p>
-              <p className="text-sm text-muted-foreground">{t('logs.detail.noCaptureHint')}</p>
+              <p className="text-sm font-medium">
+                {row && isInProgress(row)
+                  ? t('logs.detail.inProgressTitle')
+                  : t('logs.detail.noCaptureTitle')}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {row && isInProgress(row)
+                  ? t('logs.detail.inProgressHint')
+                  : t('logs.detail.noCaptureHint')}
+              </p>
             </div>
           )}
         </div>

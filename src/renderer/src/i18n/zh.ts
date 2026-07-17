@@ -169,6 +169,7 @@ const zh: Dict = {
     time: '时间',
     outcome: '结果',
     status: '状态',
+    phase: '阶段',
     model: '模型',
     channel: '渠道',
     clientType: '客户端',
@@ -190,11 +191,20 @@ const zh: Dict = {
     cacheWrite1h: '缓存写 1h',
     tokensOut: '输出',
     empty: '还没有请求记录。',
+    inProgress: '进行中',
+    phases: {
+      received: '已接收',
+      connecting: '连接上游',
+      streaming: '流式输出',
+      failover: '故障转移',
+      done: '已完成'
+    },
     outcomes: {
       success: '成功',
       failed: '失败',
       client_canceled: '客户端取消',
-      rejected: '已拒绝'
+      rejected: '已拒绝',
+      interrupted: '已中断'
     },
     detail: {
       title: '请求详情',
@@ -213,7 +223,12 @@ const zh: Dict = {
       strippedUsage: '已从客户端可见的流中剥离 usage 信息。',
       committedThenFailed: '已向客户端提交响应，随后上游在流中途失败。',
       noCaptureTitle: '该请求没有抓取记录。',
-      noCaptureHint: '前往「设置」开启「请求抓取」并将模式设为「全部请求」，即可记录完整往返。'
+      noCaptureHint: '前往「设置」开启「请求抓取」并将模式设为「全部请求」，即可记录完整往返。',
+      inProgressTitle: '请求仍在进行中。',
+      inProgressHint:
+        '前往「设置」开启「请求抓取」，即可在请求进行时逐步查看客户端与上游的往返内容。',
+      liveHint: '实时快照——会随请求推进持续更新，最后一步可能仍在等待上游响应。',
+      awaitingResponse: '等待上游响应…'
     }
   }
 }

@@ -20,9 +20,14 @@ const MAX_LIMIT = 1000
 // Exactly the columns of gateway/store.go's `requests` table, in schema order.
 const COLUMNS =
   'req_id, at, group_id, model, stream, channel_id, channel_name, outcome, http_status, ' +
-  'fail_class, first_token_ms, input_tokens, cache_read_tokens, cache_write_5m_tokens, ' +
+  'fail_class, phase, first_token_ms, input_tokens, cache_read_tokens, cache_write_5m_tokens, ' +
   'cache_write_1h_tokens, output_tokens, reasoning_tokens, ' +
   'client_type, session_id, upstreams_tried'
+
+// Sentinel outcome filter for "still running" rows. The gateway leaves `outcome` NULL
+// until a request completes (see store.go), so this maps to `outcome IS NULL` rather
+// than an equality match.
+const IN_PROGRESS = 'in_progress'
 
 function clampLimit(limit: number | undefined): number {
   if (typeof limit !== 'number' || !Number.isFinite(limit)) return DEFAULT_LIMIT
@@ -47,7 +52,10 @@ export function queryLogs(params: LogQuery = {}): LogRow[] {
     where.push('at < :before')
     bind.before = params.before
   }
-  if (params.outcome) {
+  if (params.outcome === IN_PROGRESS) {
+    // In-progress rows are the ones the gateway hasn't finalized yet: outcome NULL.
+    where.push('outcome IS NULL')
+  } else if (params.outcome) {
     where.push('outcome = :outcome')
     bind.outcome = params.outcome
   }
@@ -68,7 +76,9 @@ export function queryLogs(params: LogQuery = {}): LogRow[] {
   const sql =
     `SELECT ${COLUMNS} FROM requests` +
     (where.length ? ` WHERE ${where.join(' AND ')}` : '') +
-    ' ORDER BY at DESC LIMIT :limit'
+    // In-progress rows (outcome NULL) pin to the top so a stuck request is always
+    // visible; everything else falls back to newest-first by start time.
+    ' ORDER BY outcome IS NULL DESC, at DESC LIMIT :limit'
 
   const db = new DatabaseSync(dbPath, { readOnly: true })
   try {
