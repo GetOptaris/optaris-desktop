@@ -21,10 +21,13 @@ import {
 import { cn } from '@/lib/utils'
 import {
   clientLabel,
+  fmtElapsed,
   fmtNum,
   fmtTime,
+  isInProgress,
   outcomeBadgeClass,
   outcomeLabel,
+  phaseLabel,
   streamLabel
 } from '@/lib/log-format'
 import { useT } from '@/i18n'
@@ -33,15 +36,31 @@ import { DEFAULT_GROUP_ID } from '../../../shared/gateway'
 import type { DisplayGroup, LogQuery, LogRow, TraceRecord } from '../../../shared/gateway'
 
 const ALL = '__all__'
-const OUTCOMES = ['success', 'failed', 'client_canceled', 'rejected'] as const
+// 'in_progress' is a synthetic filter (maps to outcome IS NULL in the main process);
+// the rest are real stored outcomes. Order drives the dropdown.
+const OUTCOMES = [
+  'in_progress',
+  'success',
+  'failed',
+  'client_canceled',
+  'rejected',
+  'interrupted'
+] as const
 
 const QUERY_LIMIT = 200
+
+// While the panel is open, re-query on this cadence so in-flight requests appear and
+// advance without a manual refresh (issue #22). Cheap: a read-only WAL SELECT.
+const LIVE_REFRESH_MS = 1500
 
 export function LogsPanel(): React.JSX.Element {
   const t = useT()
   const [rows, setRows] = useState<LogRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Wall-clock used to render "how long has this in-flight request been running". Ticks
+  // with the live-refresh interval so elapsed times advance without a per-second timer.
+  const [now, setNow] = useState(() => Date.now())
   const [outcome, setOutcome] = useState<string>(ALL)
   const [model, setModel] = useState('')
   // Group id -> name, loaded once from config so the table/detail render a readable group name
@@ -55,13 +74,18 @@ export function LogsPanel(): React.JSX.Element {
   // fetch only applies its result when its token is still current, so a slow query for a
   // previously clicked row can't overwrite the trace of the row now on screen.
   const traceToken = useRef(0)
+  // Last-applied filters, so background polling reuses what the user actually applied
+  // (the model box only applies on Enter/Refresh) instead of half-typed input.
+  const appliedFilters = useRef<{ outcome: string; model: string }>({ outcome: ALL, model: '' })
 
   // Drives both the trigger label (Base UI's `items`) and the dropdown options, so a
   // closed Select shows the localized label instead of the raw value (see issue #4).
   const outcomeItems = useMemo<Record<string, React.ReactNode>>(
     () => ({
       [ALL]: t('logs.allOutcomes'),
-      ...Object.fromEntries(OUTCOMES.map((o) => [o, outcomeLabel(t, o)]))
+      ...Object.fromEntries(
+        OUTCOMES.map((o) => [o, o === 'in_progress' ? t('logs.inProgress') : outcomeLabel(t, o)])
+      )
     }),
     [t]
   )
@@ -78,26 +102,54 @@ export function LogsPanel(): React.JSX.Element {
     }
   }, [groups, t])
 
-  const runQuery = useCallback(async (filters: { outcome: string; model: string }) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const query: LogQuery = { limit: QUERY_LIMIT }
-      if (filters.outcome !== ALL) query.outcome = filters.outcome
-      if (filters.model.trim()) query.model = filters.model.trim()
-      setRows(await window.api.gateway.queryLogs(query))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const runQuery = useCallback(
+    async (filters: { outcome: string; model: string }, opts?: { silent?: boolean }) => {
+      const silent = opts?.silent ?? false
+      appliedFilters.current = filters
+      if (!silent) {
+        setLoading(true)
+        setError(null)
+      }
+      try {
+        const query: LogQuery = { limit: QUERY_LIMIT }
+        if (filters.outcome !== ALL) query.outcome = filters.outcome
+        if (filters.model.trim()) query.model = filters.model.trim()
+        setRows(await window.api.gateway.queryLogs(query))
+        if (silent) setError(null) // a good poll clears a stale transient error
+      } catch (e) {
+        // A failed background poll keeps the last good rows on screen instead of
+        // flashing an error; only explicit (non-silent) queries surface failures.
+        if (!silent) setError(e instanceof Error ? e.message : String(e))
+      } finally {
+        if (!silent) setLoading(false)
+      }
+    },
+    []
+  )
 
   // Run the first query on mount (reads the gateway's log DB via IPC — an external
   // system), so the rule's synchronous-setState guard is a false positive here.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void runQuery({ outcome: ALL, model: '' })
+  }, [runQuery])
+
+  // Live refresh: while the panel is mounted, silently re-run the last-applied query on
+  // an interval so in-flight requests appear and advance without a manual refresh. The
+  // panel unmounts on tab switch (App.tsx), which clears the interval. Skips when the
+  // window is hidden or a poll is still in flight.
+  useEffect(() => {
+    let inFlight = false
+    const id = setInterval(() => {
+      if (document.hidden) return
+      setNow(Date.now()) // advance elapsed timers even if a poll is still running
+      if (inFlight) return
+      inFlight = true
+      void runQuery(appliedFilters.current, { silent: true }).finally(() => {
+        inFlight = false
+      })
+    }, LIVE_REFRESH_MS)
+    return () => clearInterval(id)
   }, [runQuery])
 
   // Load group names once so group_id renders as a name (config is an external system).
@@ -228,15 +280,23 @@ export function LogsPanel(): React.JSX.Element {
                     {fmtTime(r.at)}
                   </TableCell>
                   <TableCell>
-                    <Badge className={cn('font-normal', outcomeBadgeClass(r.outcome))}>
-                      {outcomeLabel(t, r.outcome)}
-                    </Badge>
+                    {isInProgress(r) ? (
+                      // Live row: the badge shows the current stage + how long it's been
+                      // running, so a stuck request tells you which step it's stuck on.
+                      <Badge className={cn('font-normal', outcomeBadgeClass(null))}>
+                        {phaseLabel(t, r.phase)} · {fmtElapsed(r.at, now)}
+                      </Badge>
+                    ) : (
+                      <Badge className={cn('font-normal', outcomeBadgeClass(r.outcome))}>
+                        {outcomeLabel(t, r.outcome)}
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{fmtNum(r.http_status)}</TableCell>
                   <TableCell className="max-w-48 truncate font-mono text-xs">
                     {r.model ?? '—'}
                   </TableCell>
-                  <TableCell className="max-w-40 truncate">{r.channel_name ?? '—'}</TableCell>
+                  <TableCell className="max-w-40 truncate">{r.channel_name || '—'}</TableCell>
                   <TableCell>{clientLabel(t, r.client_type)}</TableCell>
                   <TableCell className="max-w-32 truncate">{groupNameOf(r.group_id)}</TableCell>
                   <TableCell>{streamLabel(t, r.stream)}</TableCell>

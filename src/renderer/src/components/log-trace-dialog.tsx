@@ -5,8 +5,10 @@ import {
   clientLabel,
   fmtNum,
   fmtTime,
+  isInProgress,
   outcomeBadgeClass,
   outcomeLabel,
+  phaseLabel,
   streamLabel
 } from '@/lib/log-format'
 import { useT } from '@/i18n'
@@ -174,10 +176,16 @@ export function LogTraceDialog({
           {row ? (
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
               <Meta label={t('logs.time')}>{fmtTime(row.at)}</Meta>
-              <Meta label={t('logs.outcome')}>
-                <Badge className={cn('font-normal', outcomeBadgeClass(row.outcome))}>
-                  {outcomeLabel(t, row.outcome)}
-                </Badge>
+              <Meta label={isInProgress(row) ? t('logs.phase') : t('logs.outcome')}>
+                {isInProgress(row) ? (
+                  <Badge className={cn('font-normal', outcomeBadgeClass(null))}>
+                    {phaseLabel(t, row.phase)}
+                  </Badge>
+                ) : (
+                  <Badge className={cn('font-normal', outcomeBadgeClass(row.outcome))}>
+                    {outcomeLabel(t, row.outcome)}
+                  </Badge>
+                )}
               </Meta>
               <Meta label={t('logs.status')}>{fmtNum(row.http_status)}</Meta>
               <Meta label={t('logs.channel')}>{row.channel_name || '—'}</Meta>
@@ -220,8 +228,16 @@ export function LogTraceDialog({
             </>
           ) : (
             <div className="grid gap-1 py-6 text-center">
-              <p className="text-sm font-medium">{t('logs.detail.noCaptureTitle')}</p>
-              <p className="text-sm text-muted-foreground">{t('logs.detail.noCaptureHint')}</p>
+              <p className="text-sm font-medium">
+                {row && isInProgress(row)
+                  ? t('logs.detail.inProgressTitle')
+                  : t('logs.detail.noCaptureTitle')}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {row && isInProgress(row)
+                  ? t('logs.detail.inProgressHint')
+                  : t('logs.detail.noCaptureHint')}
+              </p>
             </div>
           )}
         </div>

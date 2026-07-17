@@ -173,6 +173,7 @@ const en = {
     time: 'Time',
     outcome: 'Outcome',
     status: 'Status',
+    phase: 'Stage',
     model: 'Model',
     channel: 'Channel',
     clientType: 'Client',
@@ -194,11 +195,20 @@ const en = {
     cacheWrite1h: 'Cache W 1h',
     tokensOut: 'Out',
     empty: 'No requests recorded yet.',
+    inProgress: 'In progress',
+    phases: {
+      received: 'Received',
+      connecting: 'Contacting upstream',
+      streaming: 'Streaming',
+      failover: 'Failing over',
+      done: 'Done'
+    },
     outcomes: {
       success: 'Success',
       failed: 'Failed',
       client_canceled: 'Client canceled',
-      rejected: 'Rejected'
+      rejected: 'Rejected',
+      interrupted: 'Interrupted'
     },
     detail: {
       title: 'Request details',
@@ -218,7 +228,9 @@ const en = {
       committedThenFailed: 'Committed to the client, then the upstream failed mid-stream.',
       noCaptureTitle: 'No capture recorded for this request.',
       noCaptureHint:
-        'Enable “Request capture” in Settings and set the mode to “All requests” to record full round-trips.'
+        'Enable “Request capture” in Settings and set the mode to “All requests” to record full round-trips.',
+      inProgressTitle: 'Request still in progress.',
+      inProgressHint: 'The full round-trip capture becomes available once the request finishes.'
     }
   }
 }

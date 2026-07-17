@@ -2,14 +2,16 @@ package main
 
 // Event persistence. The engine surfaces one Event per request stage synchronously
 // on the request goroutine, so the OnEvent hook (enqueue) must never block: it only
-// pushes PhaseCompleted events into a buffered channel and returns, dropping (and
-// counting) when the buffer is full — logs are sacrificed before requests are ever
-// slowed. A single background goroutine drains the channel and does the slow work:
+// pushes the persisted lifecycle phases into a buffered channel and returns, dropping
+// (and counting) when the buffer is full — logs are sacrificed before requests are
+// ever slowed. A single background goroutine drains the channel and does the slow work:
 //
-//   - summaries → SQLite (data-dir/optaris.db), one row per completed request,
-//     written in batched transactions by a single writer connection;
+//   - summaries → SQLite (data-dir/optaris.db), one row per request keyed on req_id
+//     and UPSERTed across its lifecycle (Received seeds it with outcome NULL = "in
+//     progress"; later phases advance it; Completed finalizes it), written in batched
+//     transactions by a single writer connection;
 //   - raw payloads → JSONL (data-dir/capture/YYYY-MM-DD.jsonl), day-rolling, only
-//     when the engine attached Capture to the event.
+//     when the engine attached Capture to the (Completed) event.
 //
 // SQLite is the pure-Go modernc.org/sqlite driver (registered as "sqlite") so the
 // binary stays CGO_ENABLED=0 static. APIKeys and request/response bodies never
@@ -134,15 +136,16 @@ func openDB(path string) (*sql.DB, error) {
 const createRequestsTable = `
 CREATE TABLE IF NOT EXISTS requests (
     req_id                TEXT PRIMARY KEY,
-    at                    INTEGER, -- unix milliseconds
+    at                    INTEGER, -- unix milliseconds (request start, seeded on the first event)
     group_id              TEXT,
     model                 TEXT,
     stream                INTEGER, -- 0/1
     channel_id            TEXT,
     channel_name          TEXT,
-    outcome               TEXT,    -- success / failed / client_canceled / rejected
+    outcome               TEXT,    -- success / failed / client_canceled / rejected / interrupted; NULL = still in progress
     http_status           INTEGER,
     fail_class            TEXT,
+    phase                 TEXT,    -- lifecycle stage: received / connecting / streaming / failover / done
     first_token_ms        INTEGER,
     input_tokens          INTEGER,
     cache_read_tokens     INTEGER,
@@ -159,7 +162,23 @@ func initSchema(db *sql.DB) error {
 	if _, err := db.Exec(createRequestsTable); err != nil {
 		return fmt.Errorf("create schema: %w", err)
 	}
-	return migrateRequests(db)
+	if err := migrateRequests(db); err != nil {
+		return err
+	}
+	return sweepOrphans(db)
+}
+
+// sweepOrphans finalizes rows left "in progress" (outcome NULL) by a previous process.
+// A fresh process means any request that was in flight last time is now dead — the
+// gateway crashed or was killed before its Completed event landed, or that event was
+// dropped on buffer overflow — so those rows would otherwise show "in progress"
+// forever. We mark them interrupted here, once, at startup (before the consumer
+// goroutine begins writing new rows).
+func sweepOrphans(db *sql.DB) error {
+	if _, err := db.Exec("UPDATE requests SET outcome = 'interrupted', phase = 'done' WHERE outcome IS NULL"); err != nil {
+		return fmt.Errorf("sweep interrupted requests: %w", err)
+	}
+	return nil
 }
 
 // migrateRequests adds columns introduced after the initial schema to a pre-existing database:
@@ -176,6 +195,7 @@ func migrateRequests(db *sql.DB) error {
 		{"client_type", "TEXT"},
 		{"session_id", "TEXT"},
 		{"upstreams_tried", "INTEGER"},
+		{"phase", "TEXT"},
 	} {
 		if _, ok := have[c.name]; ok {
 			continue
@@ -209,11 +229,31 @@ func existingColumns(db *sql.DB, table string) (map[string]struct{}, error) {
 	return cols, rows.Err()
 }
 
+// persistedPhase reports whether an event's phase produces a summary-row write. We
+// persist every progress milestone so the control plane can show an in-flight request
+// live (issue #22): Received seeds the row (outcome NULL = "in progress"), the middle
+// phases advance its `phase` column, and Completed finalizes it. AttemptEnd is skipped
+// — it carries nothing the surrounding AttemptStart/Committed/Completed don't already,
+// so persisting it would just be a redundant UPSERT.
+func persistedPhase(p optaris.Phase) bool {
+	switch p {
+	case optaris.PhaseReceived,
+		optaris.PhaseAttemptStart,
+		optaris.PhaseFirstToken,
+		optaris.PhaseCommitted,
+		optaris.PhaseFailover,
+		optaris.PhaseCompleted:
+		return true
+	default:
+		return false
+	}
+}
+
 // enqueue is the OnEvent callback body. It runs synchronously in the request
-// goroutine, so it must not block: it filters to the one phase we persist and hands
-// the event off through the buffered channel, dropping and counting on overflow.
+// goroutine, so it must not block: it filters to the phases we persist and hands the
+// event off through the buffered channel, dropping and counting on overflow.
 func (s *Store) enqueue(ev optaris.Event) {
-	if ev.Phase != optaris.PhaseCompleted {
+	if !persistedPhase(ev.Phase) {
 		return
 	}
 	select {
@@ -245,9 +285,13 @@ func (s *Store) run() {
 	}
 
 	consume := func(ev optaris.Event) {
-		logCompleted(ev)
-		if ev.Capture != nil {
-			s.writeCapture(ev)
+		// Progress events (Received … Failover) only advance the summary row; the
+		// stderr line and the raw capture belong to the terminal Completed event.
+		if ev.Phase == optaris.PhaseCompleted {
+			logCompleted(ev)
+			if ev.Capture != nil {
+				s.writeCapture(ev)
+			}
 		}
 		batch = append(batch, ev)
 		if len(batch) >= sqlBatchMax {
@@ -276,19 +320,54 @@ func (s *Store) run() {
 	}
 }
 
-const insertRequest = `
-INSERT OR IGNORE INTO requests (
+// upsertRequest writes (or advances) one request's summary row. A request is written
+// several times across its lifecycle — once per persisted phase — keyed on req_id, so
+// the first event (Received) inserts the row and later phases UPDATE it in place:
+//
+//   - at:           kept from the first write (request start time), so elapsed = now-at.
+//   - phase:        always advanced to the latest stage.
+//   - channel_*:    only overwritten by a non-empty value, so Received's empty channel
+//     can't wipe a chosen upstream and failover's new channel still wins.
+//   - outcome, http_status, fail_class, upstreams_tried, usage tokens, first_token_ms:
+//     COALESCE(new, existing) — these are meaningful only at the terminal
+//     (or first-token) phase, so progress events bind NULL and leave the
+//     stored value untouched. outcome therefore stays NULL until Completed,
+//     which is exactly the "in progress" signal the control plane reads.
+//   - group_id, model, stream, client_type, session_id: same value every phase; a plain
+//     overwrite is harmless and keeps the statement simple.
+const upsertRequest = `
+INSERT INTO requests (
     req_id, at, group_id, model, stream,
     channel_id, channel_name, outcome, http_status, fail_class,
-    first_token_ms,
+    phase, first_token_ms,
     input_tokens, cache_read_tokens, cache_write_5m_tokens, cache_write_1h_tokens,
     output_tokens, reasoning_tokens,
     client_type, session_id, upstreams_tried
-) VALUES (?,?,?,?,?, ?,?,?,?,?, ?, ?,?,?,?, ?,?, ?,?,?);`
+) VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?, ?,?,?,?, ?,?, ?,?,?)
+ON CONFLICT(req_id) DO UPDATE SET
+    group_id              = excluded.group_id,
+    model                 = excluded.model,
+    stream                = excluded.stream,
+    channel_id            = CASE WHEN excluded.channel_id   <> '' THEN excluded.channel_id   ELSE requests.channel_id   END,
+    channel_name          = CASE WHEN excluded.channel_name <> '' THEN excluded.channel_name ELSE requests.channel_name END,
+    outcome               = COALESCE(excluded.outcome, requests.outcome),
+    http_status           = COALESCE(excluded.http_status, requests.http_status),
+    fail_class            = COALESCE(excluded.fail_class, requests.fail_class),
+    phase                 = excluded.phase,
+    first_token_ms        = COALESCE(excluded.first_token_ms, requests.first_token_ms),
+    input_tokens          = COALESCE(excluded.input_tokens, requests.input_tokens),
+    cache_read_tokens     = COALESCE(excluded.cache_read_tokens, requests.cache_read_tokens),
+    cache_write_5m_tokens = COALESCE(excluded.cache_write_5m_tokens, requests.cache_write_5m_tokens),
+    cache_write_1h_tokens = COALESCE(excluded.cache_write_1h_tokens, requests.cache_write_1h_tokens),
+    output_tokens         = COALESCE(excluded.output_tokens, requests.output_tokens),
+    reasoning_tokens      = COALESCE(excluded.reasoning_tokens, requests.reasoning_tokens),
+    client_type           = excluded.client_type,
+    session_id            = excluded.session_id,
+    upstreams_tried       = COALESCE(excluded.upstreams_tried, requests.upstreams_tried);`
 
-// writeSummaries inserts a batch of completed-request rows in one transaction.
-// Persistence is best-effort: any DB error is logged and the batch is dropped
-// rather than crashing the gateway.
+// writeSummaries upserts a batch of request rows in one transaction. Persistence is
+// best-effort: any DB error is logged and the batch is dropped rather than crashing
+// the gateway.
 func (s *Store) writeSummaries(batch []optaris.Event) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbWriteTimeout)
 	defer cancel()
@@ -298,7 +377,7 @@ func (s *Store) writeSummaries(batch []optaris.Event) {
 		log.Printf("summary tx begin failed, dropping %d row(s): %v", len(batch), err)
 		return
 	}
-	stmt, err := tx.PrepareContext(ctx, insertRequest)
+	stmt, err := tx.PrepareContext(ctx, upsertRequest)
 	if err != nil {
 		log.Printf("summary prepare failed, dropping %d row(s): %v", len(batch), err)
 		_ = tx.Rollback()
@@ -311,12 +390,12 @@ func (s *Store) writeSummaries(batch []optaris.Event) {
 		if _, err := stmt.ExecContext(ctx,
 			r.reqID, r.at, r.groupID, r.model, r.stream,
 			r.channelID, r.channelName, r.outcome, r.httpStatus, r.failClass,
-			r.firstTokenMs,
+			r.phase, r.firstTokenMs,
 			r.inputTokens, r.cacheReadTokens, r.cacheWrite5m, r.cacheWrite1h,
 			r.outputTokens, r.reasoningTokens,
 			r.clientType, r.sessionID, r.upstreamsTried,
 		); err != nil {
-			log.Printf("summary insert failed req_id=%s: %v", r.reqID, err)
+			log.Printf("summary upsert failed req_id=%s: %v", r.reqID, err)
 		}
 	}
 	if err := tx.Commit(); err != nil {
@@ -325,8 +404,10 @@ func (s *Store) writeSummaries(batch []optaris.Event) {
 }
 
 // reqRow is the DB row for one request. The nullable columns use `any`: a nil value
-// binds as SQL NULL, so Usage columns stay NULL on non-success and first_token_ms
-// stays NULL when the engine never reported one.
+// binds as SQL NULL. Beyond the Usage columns (NULL until a successful Completed), the
+// terminal-only fields — outcome, httpStatus, upstreamsTried — also bind nil on the
+// progress phases so the UPSERT's COALESCE preserves the not-yet-known value and
+// outcome stays NULL (= "in progress") until Completed lands.
 type reqRow struct {
 	reqID       string
 	at          int64
@@ -335,9 +416,10 @@ type reqRow struct {
 	stream      int
 	channelID   string
 	channelName string
-	outcome     string
-	httpStatus  int
+	outcome     any
+	httpStatus  any
 	failClass   string
+	phase       string
 
 	firstTokenMs any
 
@@ -350,26 +432,50 @@ type reqRow struct {
 
 	clientType     string
 	sessionID      string
-	upstreamsTried int
+	upstreamsTried any
+}
+
+// phaseString maps a lifecycle Phase to the short label stored in the `phase` column
+// and read by the control plane to show where an in-flight request currently is.
+func phaseString(p optaris.Phase) string {
+	switch p {
+	case optaris.PhaseReceived:
+		return "received"
+	case optaris.PhaseAttemptStart:
+		return "connecting"
+	case optaris.PhaseFirstToken, optaris.PhaseCommitted:
+		return "streaming"
+	case optaris.PhaseFailover:
+		return "failover"
+	case optaris.PhaseCompleted:
+		return "done"
+	default:
+		return ""
+	}
 }
 
 // summaryRow projects an Event onto the requests row. It reads only scalar summary
 // fields — never Channel.APIKey, never request/response bodies.
 func summaryRow(ev *optaris.Event) reqRow {
 	r := reqRow{
-		reqID:          ev.ReqID,
-		at:             ev.At.UnixMilli(),
-		groupID:        ev.GroupID,
-		model:          ev.Model,
-		stream:         boolToInt(ev.Stream),
-		channelID:      ev.ChannelID,
-		channelName:    ev.ChannelName,
-		outcome:        ev.Outcome,
-		httpStatus:     ev.HTTPStatus,
-		failClass:      ev.FailClass,
-		clientType:     ev.ClientType,
-		sessionID:      ev.SessionID,
-		upstreamsTried: ev.UpstreamsTried,
+		reqID:       ev.ReqID,
+		at:          ev.At.UnixMilli(),
+		groupID:     ev.GroupID,
+		model:       ev.Model,
+		stream:      boolToInt(ev.Stream),
+		channelID:   ev.ChannelID,
+		channelName: ev.ChannelName,
+		failClass:   ev.FailClass,
+		phase:       phaseString(ev.Phase),
+		clientType:  ev.ClientType,
+		sessionID:   ev.SessionID,
+	}
+	// Terminal-only fields: set them only on Completed, so a progress event binds NULL
+	// and the COALESCE upsert keeps outcome/status NULL until the request truly ends.
+	if ev.Phase == optaris.PhaseCompleted {
+		r.outcome = ev.Outcome
+		r.httpStatus = ev.HTTPStatus
+		r.upstreamsTried = ev.UpstreamsTried
 	}
 	if ev.FirstTokenMs != nil {
 		r.firstTokenMs = *ev.FirstTokenMs

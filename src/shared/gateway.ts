@@ -114,7 +114,8 @@ export interface LogQuery {
   limit?: number
   /** Keyset pagination: only rows with `at` strictly less than this (unix ms). Newest first. */
   before?: number
-  /** Filter by outcome: success / failed / client_canceled / rejected. */
+  /** Filter by outcome: success / failed / client_canceled / rejected / interrupted, or the
+   * sentinel `in_progress` for requests the gateway hasn't finalized yet (outcome IS NULL). */
   outcome?: string
   group_id?: string
   channel_id?: string
@@ -123,8 +124,11 @@ export interface LogQuery {
 }
 
 /**
- * One row of the gateway's `requests` summary table (see gateway/store.go). Usage
- * columns are NULL on any non-success outcome, so every nullable column is `| null`.
+ * One row of the gateway's `requests` summary table (see gateway/store.go). A row is
+ * written the moment a request is received and UPSERTed through its lifecycle, so it
+ * can represent an in-flight request: while running, `outcome` is null and `phase`
+ * tracks the current stage; once finished, `outcome` is set. Usage columns are null on
+ * any non-success outcome, so every nullable column is `| null`.
  */
 export interface LogRow {
   req_id: string
@@ -134,9 +138,12 @@ export interface LogRow {
   stream: number | null
   channel_id: string | null
   channel_name: string | null
+  /** Final outcome: success / failed / client_canceled / rejected / interrupted. Null while the request is still in progress. */
   outcome: string | null
   http_status: number | null
   fail_class: string | null
+  /** Current lifecycle stage: received / connecting / streaming / failover / done. Drives the live "in progress" indicator; null on rows written before this column existed. */
+  phase: string | null
   first_token_ms: number | null
   input_tokens: number | null
   cache_read_tokens: number | null
