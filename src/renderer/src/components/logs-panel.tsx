@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCwIcon } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -51,7 +50,7 @@ const QUERY_LIMIT = 200
 
 // While the panel is open, re-query on this cadence so in-flight requests appear and
 // advance without a manual refresh (issue #22). Cheap: a read-only WAL SELECT.
-const LIVE_REFRESH_MS = 1500
+const LIVE_REFRESH_MS = 1000
 
 export function LogsPanel(): React.JSX.Element {
   const t = useT()
@@ -71,7 +70,7 @@ export function LogsPanel(): React.JSX.Element {
   const [trace, setTrace] = useState<TraceRecord | null>(null)
   const [traceLoading, setTraceLoading] = useState(false)
   // Last-applied filters, so background polling reuses what the user actually applied
-  // (the model box only applies on Enter/Refresh) instead of half-typed input.
+  // (the model box only applies on Enter) instead of half-typed input.
   const appliedFilters = useRef<{ outcome: string; model: string }>({ outcome: ALL, model: '' })
 
   // Drives both the trigger label (Base UI's `items`) and the dropdown options, so a
@@ -249,10 +248,10 @@ export function LogsPanel(): React.JSX.Element {
           className="w-56"
         />
 
-        <Button type="button" variant="outline" size="sm" onClick={refresh} disabled={loading}>
-          <RefreshCwIcon className={cn('size-4', loading && 'animate-spin')} />
-          {t('logs.refresh')}
-        </Button>
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <RefreshCwIcon className={cn('size-3.5', loading && 'animate-spin')} />
+          {t('logs.autoRefresh')}
+        </span>
 
         <span className="ml-auto text-xs text-muted-foreground">
           {rows.length} {rows.length === 1 ? t('logs.row') : t('logs.rows')}

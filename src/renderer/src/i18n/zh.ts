@@ -163,7 +163,7 @@ const zh: Dict = {
     outcomePlaceholder: '结果',
     allOutcomes: '全部结果',
     filterModel: '按模型过滤…',
-    refresh: '刷新',
+    autoRefresh: '每秒自动刷新',
     row: '条',
     rows: '条',
     time: '时间',
