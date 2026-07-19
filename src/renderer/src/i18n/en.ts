@@ -168,7 +168,8 @@ const en = {
     sessionAffinityTtlHint:
       'Idle lifetime of a session→channel binding, renewed on each success. Default 10m.',
     statsWindow: 'Stats window',
-    statsWindowHint: 'Rolling window used to score channels for routing. Default 10m.'
+    statsWindowHint:
+      'Rolling window used to score channels for routing. Takes effect after the app restarts. Default 10m.'
   },
   update: {
     checkForUpdates: 'Check for updates',

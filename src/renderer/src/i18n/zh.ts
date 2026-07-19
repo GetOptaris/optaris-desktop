@@ -160,7 +160,7 @@ const zh: Dict = {
     sessionAffinityTtl: '会话亲和 TTL',
     sessionAffinityTtlHint: '「会话→渠道」绑定的空闲存活时长，每次成功后续期。默认 10m。',
     statsWindow: '统计窗口',
-    statsWindowHint: '用于给渠道打分做路由的滚动窗口。默认 10m。'
+    statsWindowHint: '用于给渠道打分做路由的滚动窗口。重启应用后生效。默认 10m。'
   },
   update: {
     checkForUpdates: '检查更新',
