@@ -56,6 +56,19 @@ export interface DisplayGroup {
 export interface DisplaySettings {
   capture_enabled?: boolean
   capture_mode?: 'failed_only' | 'all'
+  /**
+   * Timeout / duration knobs, passed through to the Go engine's settings.Settings. Each is
+   * a Go duration string ("60s" / "4m" / "1m30s"); an omitted field falls back to the
+   * engine default. Edited via the Advanced Options section of the settings panel.
+   */
+  t1_first_event_timeout?: string
+  non_stream_timeout?: string
+  t2_idle_timeout?: string
+  t3_failover_timeout?: string
+  max_stream_duration?: string
+  cooldown?: string
+  session_affinity_ttl?: string
+  stats_window?: string
   [key: string]: unknown
 }
 

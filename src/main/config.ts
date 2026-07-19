@@ -46,6 +46,19 @@ export interface GatewayGroup {
 export interface GatewaySettings {
   capture_enabled?: boolean
   capture_mode?: 'failed_only' | 'all'
+  /**
+   * Timeout / duration knobs, forwarded verbatim to the Go engine's settings.Settings.
+   * Each is a Go duration string ("60s" / "4m" / "1m30s"); omitting one falls back to the
+   * engine default (settings.Default()). See src/renderer/.../settings-panel.tsx.
+   */
+  t1_first_event_timeout?: string
+  non_stream_timeout?: string
+  t2_idle_timeout?: string
+  t3_failover_timeout?: string
+  max_stream_duration?: string
+  cooldown?: string
+  session_affinity_ttl?: string
+  stats_window?: string
   [key: string]: unknown
 }
 
