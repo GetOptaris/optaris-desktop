@@ -167,7 +167,7 @@ const en = {
     outcomePlaceholder: 'Outcome',
     allOutcomes: 'All outcomes',
     filterModel: 'Filter by model…',
-    refresh: 'Refresh',
+    autoRefresh: 'Auto-refreshes every second',
     row: 'row',
     rows: 'rows',
     time: 'Time',
