@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTheme } from 'next-themes'
+import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import {
@@ -89,6 +91,8 @@ export function SettingsPanel({
           </div>
         </CardContent>
       </Card>
+
+      <AdvancedCard settings={settings} onUpdateSettings={onUpdateSettings} />
     </div>
   )
 }
@@ -241,6 +245,195 @@ function AboutCard(): React.JSX.Element {
           {checking ? t('update.checking') : t('update.checkForUpdates')}
         </Button>
       </CardContent>
+    </Card>
+  )
+}
+
+/** The engine settings keys the Advanced section edits, all Go duration strings. */
+type DurationKey =
+  | 't1_first_event_timeout'
+  | 'non_stream_timeout'
+  | 't2_idle_timeout'
+  | 't3_failover_timeout'
+  | 'max_stream_duration'
+  | 'cooldown'
+  | 'session_affinity_ttl'
+  | 'stats_window'
+
+/**
+ * The Advanced Options duration fields in display order — the five request-lifecycle
+ * timeouts first, then the tuning durations. `placeholder` is the engine default
+ * (settings.Default()), shown when the field is left empty.
+ */
+const DURATION_FIELDS: {
+  key: DurationKey
+  labelKey: string
+  hintKey: string
+  placeholder: string
+}[] = [
+  {
+    key: 't1_first_event_timeout',
+    labelKey: 'settings.t1FirstEvent',
+    hintKey: 'settings.t1FirstEventHint',
+    placeholder: '60s'
+  },
+  {
+    key: 'non_stream_timeout',
+    labelKey: 'settings.nonStream',
+    hintKey: 'settings.nonStreamHint',
+    placeholder: '4m'
+  },
+  {
+    key: 't2_idle_timeout',
+    labelKey: 'settings.t2Idle',
+    hintKey: 'settings.t2IdleHint',
+    placeholder: '60s'
+  },
+  {
+    key: 't3_failover_timeout',
+    labelKey: 'settings.t3Failover',
+    hintKey: 'settings.t3FailoverHint',
+    placeholder: '5m'
+  },
+  {
+    key: 'max_stream_duration',
+    labelKey: 'settings.maxStreamDuration',
+    hintKey: 'settings.maxStreamDurationHint',
+    placeholder: '8m'
+  },
+  {
+    key: 'cooldown',
+    labelKey: 'settings.cooldown',
+    hintKey: 'settings.cooldownHint',
+    placeholder: '20s'
+  },
+  {
+    key: 'session_affinity_ttl',
+    labelKey: 'settings.sessionAffinityTtl',
+    hintKey: 'settings.sessionAffinityTtlHint',
+    placeholder: '10m'
+  },
+  {
+    key: 'stats_window',
+    labelKey: 'settings.statsWindow',
+    hintKey: 'settings.statsWindowHint',
+    placeholder: '10m'
+  }
+]
+
+// Accepts Go time.ParseDuration forms ("90s" / "5m" / "1m30s") and a bare "0" (which
+// disables max_stream_duration). Non-negative only. Kept light: the engine re-parses on
+// load, so this just stops an obviously-broken value from reaching disk.
+const DURATION_RE = /^(?:0|(?:\d+(?:\.\d+)?(?:ns|us|µs|ms|s|m|h))+)$/
+
+/**
+ * One duration input. It holds its own text so the user can type freely, but only ever
+ * commits VALID or EMPTY values up to the draft: empty clears the override (the engine
+ * falls back to its default), a valid string is written through, and an invalid one is
+ * surfaced inline and never persisted — so the on-disk config can't carry a duration the
+ * gateway would reject (which would make it discard the whole config on reload).
+ */
+function DurationField({
+  id,
+  label,
+  hint,
+  placeholder,
+  value,
+  onCommit
+}: {
+  id: string
+  label: string
+  hint: string
+  placeholder: string
+  value: string | undefined
+  onCommit: (next: string | undefined) => void
+}): React.JSX.Element {
+  const t = useT()
+  const [text, setText] = useState(value ?? '')
+  const [lastValue, setLastValue] = useState(value)
+
+  // Re-seed the text when the persisted value changes from outside (a Save or Reset
+  // rebuilds the draft). This is the React-sanctioned "reset state on prop change" done
+  // during render rather than in an effect, so it can't trigger a cascading re-render.
+  if (value !== lastValue) {
+    setLastValue(value)
+    setText(value ?? '')
+  }
+
+  const trimmed = text.trim()
+  const invalid = trimmed.length > 0 && !DURATION_RE.test(trimmed)
+
+  return (
+    <div className="grid gap-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        type="text"
+        value={text}
+        placeholder={placeholder}
+        aria-invalid={invalid}
+        onChange={(e) => {
+          const raw = e.target.value
+          setText(raw)
+          const v = raw.trim()
+          if (v.length === 0) onCommit(undefined)
+          else if (DURATION_RE.test(v)) onCommit(v)
+          // invalid: keep the text and show the error, but don't touch the draft
+        }}
+      />
+      {invalid ? (
+        <p className="text-xs text-destructive">{t('settings.durationInvalid')}</p>
+      ) : (
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      )}
+    </div>
+  )
+}
+
+/** Collapsible section exposing the engine's upstream timeout / tuning durations. */
+function AdvancedCard({
+  settings,
+  onUpdateSettings
+}: {
+  settings: DisplaySettings
+  onUpdateSettings: (patch: Partial<DisplaySettings>) => void
+}): React.JSX.Element {
+  const t = useT()
+  const [collapsed, setCollapsed] = useState(true)
+
+  return (
+    <Card>
+      <CardHeader>
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-expanded={!collapsed}
+          className="flex w-full items-center justify-between gap-2 text-left"
+        >
+          <CardTitle>{t('settings.advancedTitle')}</CardTitle>
+          {collapsed ? (
+            <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
+          )}
+        </button>
+        <CardDescription>{t('settings.advancedDescription')}</CardDescription>
+      </CardHeader>
+      {collapsed ? null : (
+        <CardContent className="grid gap-5 sm:grid-cols-2">
+          {DURATION_FIELDS.map((f) => (
+            <DurationField
+              key={f.key}
+              id={`setting-${f.key}`}
+              label={t(f.labelKey)}
+              hint={t(f.hintKey)}
+              placeholder={f.placeholder}
+              value={typeof settings[f.key] === 'string' ? (settings[f.key] as string) : undefined}
+              onCommit={(next) => onUpdateSettings({ [f.key]: next })}
+            />
+          ))}
+        </CardContent>
+      )}
     </Card>
   )
 }
