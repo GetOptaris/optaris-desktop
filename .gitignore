@@ -5,6 +5,7 @@ out
 .eslintcache
 *.log*
 /.idea/
+/.cvox.json
 
 # Compiled gateway sidecar binaries (built by scripts/build-gateway.sh)
 /resources/bin/
