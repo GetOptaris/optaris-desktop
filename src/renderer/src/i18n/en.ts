@@ -157,11 +157,11 @@ const en = {
     nonStreamHint: 'Overall timeout for a non-streaming response. Default 4m.',
     t2Idle: 'Stream idle timeout',
     t2IdleHint:
-      'Streaming, post-commit: max gap between upstream bytes before the stream is considered stalled. Default 60s.',
+      'Streaming, post-commit: max gap between upstream bytes before the stream is considered stalled. Default 90s.',
     t3Failover: 'Failover timeout',
     t3FailoverHint: 'Overall cap across all upstream attempts for one request. Default 5m.',
     maxStreamDuration: 'Max stream duration',
-    maxStreamDurationHint: 'Hard wall-clock cap on a committed stream. 0 disables it. Default 8m.',
+    maxStreamDurationHint: 'Hard wall-clock cap on a committed stream. 0 disables it. Default 10m.',
     cooldown: 'Cooldown',
     cooldownHint: 'How long a channel+model pair is skipped after a failure. Default 20s.',
     sessionAffinityTtl: 'Session affinity TTL',

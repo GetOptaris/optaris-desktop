@@ -287,7 +287,7 @@ const DURATION_FIELDS: {
     key: 't2_idle_timeout',
     labelKey: 'settings.t2Idle',
     hintKey: 'settings.t2IdleHint',
-    placeholder: '60s'
+    placeholder: '90s'
   },
   {
     key: 't3_failover_timeout',
@@ -299,7 +299,7 @@ const DURATION_FIELDS: {
     key: 'max_stream_duration',
     labelKey: 'settings.maxStreamDuration',
     hintKey: 'settings.maxStreamDurationHint',
-    placeholder: '8m'
+    placeholder: '10m'
   },
   {
     key: 'cooldown',
